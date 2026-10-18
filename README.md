@@ -35,6 +35,18 @@ Gemini model names change often. If the default `GEMINI_MODEL` returns a 404, li
 uv run python -c "from google import genai; [print(m.name) for m in genai.Client().models.list() if 'flash' in m.name]"
 ```
 
+## Web UI
+
+A browser page over the same API, so you don't need curl:
+
+```bash
+uv run python scripts/serve.py   # or: docker compose up -d (same port)
+```
+
+Open http://localhost:8000, type a question and press **Ask** (or Ctrl+Enter). The status pill follows the run (`running` → `awaiting review` → `done`). When the critic accepts a draft, the page shows it with numbered citations and a Sources list. **Approve** finalizes it. **Send feedback** sends it back to the writer, and the draft returns for review once it's revised. The final report is rendered as Markdown, including its `## Sources` section.
+
+The run id is kept in the URL (`#run=<id>`), so reloading the page reconnects to the run. Runs live in the checkpoint database, not the browser. The page is a single file (`src/analyst/static/index.html`) with no build step. It loads `marked` and `DOMPurify` from a CDN; without them it shows the report as plain text.
+
 ## Running with Docker
 
 The image is multi-stage. A builder installs the locked dependencies with uv, using **CPU-only torch**, and downloads the embedding model. The slim runtime stage gets only the virtualenv, the model and the source. It runs as a **non-root** user with `HF_HUB_OFFLINE=1`, so the model loads from the image and the container never calls Hugging Face. No `.env` is baked in. `data/` is a **bind mount**, so the index, the database and the paused-run checkpoints persist on the host.
@@ -307,7 +319,8 @@ multi-agent-analyst/
 │   │   └── search.py           # CLI: inspect retrieval results for a query
 │   │
 │   ├── tracing.py              # Langfuse callback via the run config (no-op if unconfigured)
-│   └── api.py                  # FastAPI app: start / poll / review runs (background threads)
+│   ├── api.py                  # FastAPI app: start / poll / review runs (background threads)
+│   └── static/index.html       # web UI served at GET / (vanilla JS, no build step)
 │
 ├── evals/
 │   ├── questions.yaml          # questions + regex ground truths (from the generator)
@@ -344,3 +357,4 @@ Each step is small, runnable, and explained before moving on.
 13. ✅ FastAPI service (start / poll / review, background runs, restart-safe via the checkpointer)
 14. ✅ Eval harness (8 ground-truth questions, deterministic scoring: answer hit, citation coverage, no invented citations)
 15. ✅ Docker + docker-compose (multi-stage uv build, CPU torch, offline model, non-root; api + indexer services)
+16. ✅ Web UI at `/` (one static page over the same API: ask, live status, approve or send feedback, rendered report)

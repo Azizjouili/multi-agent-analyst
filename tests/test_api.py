@@ -66,6 +66,20 @@ def test_health(tmp_path):
         assert client.get("/health").json() == {"status": "ok", "active_runs": 0}
 
 
+def test_web_ui_served_at_root(tmp_path):
+    with api(tmp_path) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        html = response.text
+        # The elements the page's script wires up, and the endpoints it calls.
+        for marker in ('id="question"', 'id="ask-btn"', 'id="approve-btn"', 'id="feedback-btn"'):
+            assert marker in html
+        assert "/runs" in html and "/review" in html
+        # The UI is a page, not an API operation: it stays out of the OpenAPI schema.
+        assert "/" not in client.get("/openapi.json").json()["paths"]
+
+
 def test_start_poll_approve_get_report(tmp_path):
     with api(tmp_path) as client:
         thread_id = start(client)

@@ -4,6 +4,7 @@
     GET  /runs/{thread_id}                                   -> status + review or report
     POST /runs/{thread_id}/review   {"approved", "feedback"} -> 202, resumes the run
     GET  /health
+    GET  /                                                   -> the web UI (static/index.html)
 
     status:  running ---> awaiting_review --approve--> running ---> done
                                \\--reject (feedback)--> running ---> awaiting_review ...
@@ -20,7 +21,7 @@ and a run that was cut off mid-way continues from its last checkpoint the next
 time someone asks about it. The in-memory registry only tracks which runs are
 executing *in this process* right now.
 
-Start it with `uv run python scripts/serve.py`. Interactive docs: /docs.
+Start it with `uv run python scripts/serve.py`. Web UI: /. Interactive docs: /docs.
 """
 
 from __future__ import annotations
@@ -31,9 +32,11 @@ import uuid
 from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
@@ -44,6 +47,10 @@ from analyst.graph import build_graph, pending_review, run_config, sqlite_checkp
 log = logging.getLogger("analyst.api")
 
 Status = Literal["running", "awaiting_review", "done", "failed"]
+
+# Next to this module, inside the package: the Dockerfile copies src/ whole,
+# so the page ships in the image with no extra COPY line.
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 # ---------------------------------------------------------------------------
@@ -248,5 +255,15 @@ def create_app(
     @app.get("/health")
     def health(service: Runs) -> dict[str, Any]:
         return {"status": "ok", "active_runs": service.active_runs()}
+
+    # The web UI. Served by this same app rather than a separate frontend
+    # server: same origin, so the page calls /runs with no CORS setup, and one
+    # port works the same locally and in Docker. A single FileResponse instead
+    # of a StaticFiles mount: there is exactly one file, and a mount at "/"
+    # would shadow the API routes. Read from disk on each request, so editing
+    # the HTML needs only a browser refresh. Hidden from /docs: it isn't API.
+    @app.get("/", include_in_schema=False)
+    def web_ui() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
     return app
