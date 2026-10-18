@@ -6,6 +6,17 @@ It runs on **Google Gemini's free tier** and uses **local embeddings**, so it co
 
 > Status: ✅ all roadmap steps built (see [Build roadmap](#build-roadmap)).
 
+## Why this beats a single LLM call
+
+Measured, not claimed. `evals/compare.py` scores the full pipeline against a strong one-shot baseline — a single Gemini call given the *same* top-10 retrieved passages the RAG agent uses — on the same questions and the same deterministic scorer:
+
+| Method | Answer hit | Citation coverage | LLM calls/q |
+|---|---|---|---|
+| One-shot RAG baseline | 57% | 75% | 1.9 |
+| **Multi-agent pipeline** | **86%** | **100%** | 10.1 |
+
+7 questions, same model on both sides (partly on the fast fallback model under quota). The gap is on questions where the answer must be **computed** or pulled **without cross-company confusion** — e.g. NVIDIA's year-over-year growth the baseline couldn't derive from text, and Microsoft's net income, where the baseline's retrieved chunks confused Microsoft with Walmart and it gave up. On simple lookups and qualitative questions the two tie, so the pipeline earns its cost on the hard questions. [Full per-question table and honest analysis below.](#does-the-agentic-design-actually-help)
+
 ## Quickstart
 
 ```bash
@@ -352,33 +363,40 @@ uv run python evals/compare.py --all                   # the full table (see quo
 
 The cache holds raw outputs rather than scores, so fixing a ground-truth pattern re-scores everything with zero calls. Cells marked **†** fell back to the fast model on a 429, so they aren't like-for-like; re-run them with `--fresh --only <id>`.
 
-**First result: a two-question smoke run, not a verdict.** (`gemini-3.8-flash`, 2026-10-18)
+
+---
+
+**Results (7 of the 12 questions, 2026-10-18).** The strong model's daily quota ran out partway, so several cells fell back to the fast model (`†`); each cell still uses the same model on both sides.
 
 | Method | Answer hit | Citation coverage | Invented-citation rate | LLM calls / question |
 |---|---|---|---|---|
-| no_context | 50% | 0% | 0% | 1.5 |
-| baseline | 100% | 100% | 0% | 1.5 |
-| pipeline | 100% | 100% | 0% | 8.5 |
+| baseline | 57% | 75% | 0% | 1.9 |
+| pipeline | 86% | 100% | 0% | 10.1 |
 
-| Question | no_context | baseline | pipeline |
+| Question | Type | baseline | pipeline |
 |---|---|---|---|
-| aapl_revenue_fy2024 | ✅ · 0% · none · 1 | ✅ · 100% · none · 1 | ✅ · 100% · none · 8 |
-| aapl_supply_chain_risks_fy2024 | ❌ · 0% · none · 2 † | ✅ · 100% · none · 2 † | ✅ · 100% · none · 9 |
+| aapl_revenue_fy2024 | lookup | ✅ · 100% | ✅ · 100% |
+| meta_rd_share_fy2024 | ratio | ✅ · 100% | ✅ · 100% |
+| aapl_supply_chain_risks_fy2024 | qualitative | ✅ · 100% | ✅ · 100% |
+| nke_wholesale_fy2025 | qualitative | ✅ · 100% | ✅ · 100% |
+| nvda_revenue_growth | computed | ❌ · 50% | ✅ · 100% |
+| msft_net_income | multi-year figure | ❌ · 0% | ✅ · 100% |
+| tsla_net_income_change | computed | ❌ · 75% | ❌ · 100% |
 
-Cell: answer hit · citation coverage · invented citations · LLM calls. The full 12-question table replaces this one once quota allows.
+Each cell: answer hit · citation coverage. Scored deterministically; quantitative answers derived from XBRL.
 
-**Reading it honestly.** On these two questions a single grounded call **ties** the pipeline at about a sixth of the calls. Even the no-context call knew Apple's FY2024 revenue from memory: a famous, frequently quoted figure isn't a test of grounding. That's expected. Both questions have their answer stated in one Item of one filing, which is exactly the case where one retrieval plus one call is enough, and where the multi-agent design is overhead. Grounding still matters: the no-context answer had no citations at all, so a reader couldn't check it, and it missed the risk question.
+**Reading it honestly.**
 
-The pipeline should earn its cost on the questions this subset doesn't cover:
-- figures that must be *computed* (NVIDIA's growth rate, Meta's R&D share of revenue), which the SQL agent derives exactly from XBRL while the baseline only sees narrative text;
-- questions that span several companies or fiscal years, which one retrieval with the raw question covers poorly;
-- citation accuracy under pressure, where the critic's deterministic gate and the citation resolvers stop invented or missing citations from reaching the reader.
+- **The pipeline wins where the architecture does real work.** On `nvda_revenue_growth` the baseline couldn't derive the +114.2% growth from narrative text and reported the figure as absent; the SQL agent computed it from XBRL and cited the rows. On `msft_net_income` the baseline's retrieved chunks confused Microsoft with Walmart — it wrote *"those figures belong to Walmart"* and refused — while the SQL query returned Microsoft's exact net income for both years. Structured SQL can't make the cross-company mistake text retrieval did.
+- **It ties on the easy half.** Simple lookups, a ratio the model computes correctly, and both qualitative questions all tie — a single grounded call is enough there, so the multi-agent machinery is pure overhead. Saying so is the point: the pipeline is worth its ~5× cost on hard questions, not on every question.
+- **One honest miss, kept visible.** On `tsla_net_income_change` both methods fail: the pipeline reports and cites FY2024's net income but not FY2023's, which the ground truth also requires. The eval catches a real writer shortcoming instead of rubber-stamping; the fix is a writer-prompt change, left as a follow-up rather than tuning the test to pass.
+- **Citation coverage is the consistent edge:** 100% for the pipeline on every question vs 75% for the baseline, because the critic's deterministic gate and the citation resolvers stop uncited or invented claims before they reach the reader.
 
-Part of that last advantage is cheap code, not agents: the same resolver could be bolted onto a single call. Until the full run is in, treat these points as hypotheses with a test bench, not results.
+One earlier ground-truth fix: the supply-chain patterns were narrower than Apple's wording ("single-source" vs "single or limited sources"); both correct reports missed it, so the patterns now accept the filing's phrasing and the evidence test re-checks each against Apple's Item 1A. No pattern was changed to make a wrong answer pass.
 
-One ground-truth fix came out of this run. The supply-chain question's patterns were narrower than the filing: Apple writes both "single-source" and "single or limited sources". Both correct reports missed it, so the patterns now accept the filing's own phrasings, and the evidence test re-checks each one against Apple's Item 1A.
 
 ---
+
 
 ## 7. Proposed folder structure
 
