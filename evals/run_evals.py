@@ -1,11 +1,14 @@
 """Eval harness: run each question through the pipeline and score the report.
 
-    uv run python evals/run_evals.py                      # all questions
-    uv run python evals/run_evals.py --only growth_2024   # one question
-    uv run python evals/run_evals.py --min-answer-hit 0.75 # fail (exit 1) below 75%
+    uv run python evals/run_evals.py                          # all questions
+    uv run python evals/run_evals.py --only nvda_revenue_growth   # one question
+    uv run python evals/run_evals.py --min-answer-hit 0.75     # fail (exit 1) below 75%
 
-Needs the sample data and index (see the README quick start) and, with
-LLM_PROVIDER=gemini, a GOOGLE_API_KEY: the *pipeline* still calls the LLM.
+Needs the fetched SEC corpus, its index and database (see "Data (SEC EDGAR)"
+in the README) and, with LLM_PROVIDER=gemini, a GOOGLE_API_KEY: the
+*pipeline* still calls the LLM. Quantitative answers are derived from
+financials.csv at load time (evals/ground_truth.py); qualitative ones are
+regexes checked against the filings by tests/test_evals.py.
 
 Scoring is deterministic: regexes and set checks, no LLM-as-judge. Why:
   - repeatable: the same report always gets the same score, so a score change
@@ -33,12 +36,17 @@ import re
 import sys
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+try:  # imported as evals.run_evals (tests) or run as a script (evals/ is then on sys.path)
+    from evals import ground_truth
+except ImportError:
+    import ground_truth  # type: ignore[no-redef]
 
 from analyst.agents.citations import SOURCE_ID
 from analyst.agents.common import short_error
@@ -59,16 +67,45 @@ _SOURCE_ENTRY = re.compile(r"^(\d+)\. ", re.MULTILINE)
 class EvalCase:
     id: str
     question: str
-    expect: list[str]
+    expect: list[str] = field(default_factory=list)  # literal regexes (qualitative answers)
     source: str = ""
+    # Quantitative answers, named rather than typed in: resolved into regexes
+    # from financials.csv by load_questions (see evals/ground_truth.py).
+    facts: list[dict[str, Any]] = field(default_factory=list)
+    # Where a qualitative answer lives ("AAPL_2024.html#item-1a"). Not used for
+    # scoring; tests/test_evals.py checks each `expect` pattern really occurs
+    # there in the fetched filing, so the ground truth is verifiably true.
+    evidence: list[str] = field(default_factory=list)
+    ground_truth: list[str] = field(default_factory=list)  # facts in words, for the results file
 
 
-def load_questions(path: Path) -> list[EvalCase]:
+def load_questions(path: Path, financials: Path | None = None) -> list[EvalCase]:
+    """Read the questions and resolve every `facts` entry into an `expect` regex.
+
+    `financials` is needed only if some question has facts (default:
+    data/datasets/financials.csv, written by scripts/fetch_edgar.py).
+    """
     cases = [EvalCase(**item) for item in yaml.safe_load(path.read_text(encoding="utf-8"))]
     ids = [c.id for c in cases]
     if len(ids) != len(set(ids)):
         raise ValueError(f"{path}: duplicate question ids")
+    if any(c.facts for c in cases):
+        csv_path = financials or get_settings().datasets_dir / "financials.csv"
+        if not csv_path.exists():
+            raise SystemExit(
+                f"{path} derives answers from {csv_path}, which doesn't exist yet. "
+                "Fetch the corpus first: uv run python scripts/fetch_edgar.py"
+            )
+        table = ground_truth.load_financials(csv_path)
+        for case in cases:
+            case.expect = [
+                *case.expect,
+                *(ground_truth.expected_pattern(f, table) for f in case.facts),
+            ]
+            case.ground_truth = [ground_truth.describe_fact(f, table) for f in case.facts]
     for case in cases:
+        if not case.expect:
+            raise ValueError(f"{path}: question {case.id!r} has no expect or facts")
         for pattern in case.expect:
             re.compile(pattern)  # a typo in a regex should fail here, not mid-run
     return cases
@@ -164,6 +201,7 @@ def run_case(graph, case: EvalCase, settings: Settings, run_id: str) -> dict[str
         "id": case.id,
         "question": case.question,
         "source": case.source,
+        "ground_truth": case.ground_truth,
         "thread_id": thread_id,
         **result,
         "duration_s": round(time.perf_counter() - started, 2),
@@ -231,6 +269,9 @@ def main(
     parser = argparse.ArgumentParser(description="Run the eval questions and score the reports.")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS)
     parser.add_argument(
+        "--financials", type=Path, help="CSV the answers come from (default: data/datasets/)"
+    )
+    parser.add_argument(
         "--out", type=Path, help="results JSON (default: evals/results/<time>.json)"
     )
     parser.add_argument("--only", action="append", metavar="ID", help="run only these question ids")
@@ -238,7 +279,7 @@ def main(
     parser.add_argument("--min-citation-coverage", type=float, default=0.0)
     args = parser.parse_args(argv)
 
-    cases = load_questions(args.questions)
+    cases = load_questions(args.questions, args.financials)
     if args.only:
         unknown = set(args.only) - {c.id for c in cases}
         if unknown:

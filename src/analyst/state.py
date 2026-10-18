@@ -37,7 +37,7 @@ class Source(TypedDict):
     id: str  # stable, collision-free id; see make_source_id()
     kind: AgentName
     title: str
-    locator: str  # URL, "file.pdf#p4", or the SQL query
+    locator: str  # URL, "AAPL_2024.html#item-1a/c3-4" (a filing passage), or the SQL query
     snippet: str  # the exact evidence text the claim rests on
 
 

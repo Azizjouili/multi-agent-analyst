@@ -19,8 +19,10 @@ from analyst.llm import FakeChatModel
 from analyst.state import make_source_id
 
 QUESTION = "Summarize the company's revenue trend and key risks, with sources"
-DATA_ID = make_source_id("data", "SELECT year, SUM(revenue_usd) FROM quarterly_sales GROUP BY year")
-RAG_ID = make_source_id("rag", "annual_report_2024.pdf#p4")
+DATA_ID = make_source_id(
+    "data", "SELECT fiscal_year, value FROM financials WHERE ticker = 'KRO' AND metric = 'revenue'"
+)
+RAG_ID = make_source_id("rag", "KRO_2024.html#item-1a/c0-1")
 SOURCES = {
     DATA_ID: {
         "id": DATA_ID,
@@ -32,8 +34,8 @@ SOURCES = {
     RAG_ID: {
         "id": RAG_ID,
         "kind": "rag",
-        "title": "Annual Report 2024, p. 4",
-        "locator": "annual_report_2024.pdf#p4",
+        "title": "Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A. Risk Factors",
+        "locator": "KRO_2024.html#item-1a/c0-1",
         "snippet": "A 10% tariff would cut margin ~2 points.",
     },
 }

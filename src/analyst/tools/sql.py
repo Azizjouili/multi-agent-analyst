@@ -215,10 +215,16 @@ def run_sql(
 # Schema description for the LLM
 # ---------------------------------------------------------------------------
 def table_catalog(db_path: Path) -> list[tuple[str, int, list[str]]]:
-    """[(table, row count, column names)]: a compact overview for the supervisor.
+    """[(table, row count, column labels)]: a compact overview for the supervisor.
 
     The data agent gets the full profile (describe_schema). The planner only
     needs to know which tables and dimensions exist to write a sensible task.
+    A label is the column name, plus its values when there are few of them
+    ("ticker [AAPL|AMZN|...]") and its range for a year column
+    ("fiscal_year 2023-2026"). Why: in a long-format table such as financials,
+    the *rows* say what data exists (which companies, which metrics), and a
+    planner that sees only "metric, value" can't tell that revenue is there
+    but gross profit is missing for Amazon.
     """
     with open_readonly(db_path, guarded=False) as conn:
         tables = [
@@ -229,10 +235,37 @@ def table_catalog(db_path: Path) -> list[tuple[str, int, list[str]]]:
             (
                 t,
                 conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0],
-                [row[1] for row in conn.execute(f'PRAGMA table_info("{t}")')],
+                [
+                    _column_label(conn, t, row[1], row[2])
+                    for row in conn.execute(f'PRAGMA table_info("{t}")')
+                ],
             )
             for t in tables
         ]
+
+
+CATALOG_MAX_VALUES = 12
+CATALOG_MAX_CHARS = 200  # longer value lists (e.g. 12 full company names) are left out
+
+
+def _column_label(conn: sqlite3.Connection, table: str, col: str, col_type: str) -> str:
+    t, c = f'"{table}"', f'"{col}"'
+    if col_type == "TEXT":
+        values = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT DISTINCT {c} FROM {t} WHERE {c} IS NOT NULL ORDER BY {c} LIMIT ?",
+                (CATALOG_MAX_VALUES + 1,),
+            )
+        ]
+        listed = "|".join(map(str, values))
+        if values and len(values) <= CATALOG_MAX_VALUES and len(listed) <= CATALOG_MAX_CHARS:
+            return f"{col} [{listed}]"
+    elif col_type == "INTEGER" and "year" in col.lower():
+        lo, hi = conn.execute(f"SELECT MIN({c}), MAX({c}) FROM {t}").fetchone()
+        if lo is not None:
+            return f"{col} {lo}-{hi}" if lo != hi else f"{col} {lo}"
+    return col
 
 
 def describe_schema(db_path: Path, max_values: int = 12) -> str:
@@ -243,6 +276,9 @@ def describe_schema(db_path: Path, max_values: int = 12) -> str:
     (not 'APAC'), and to filter on years it should know which years exist.
     Showing distinct values and ranges prevents a whole class of
     "query ran but returned nothing" errors.
+
+    Long-format tables (one row per company, year and metric, like the XBRL
+    financials) get two more profiles; see _long_format_notes.
     """
     out: list[str] = []
     with open_readonly(db_path, guarded=False) as conn:
@@ -254,6 +290,7 @@ def describe_schema(db_path: Path, max_values: int = 12) -> str:
             t = f'"{table}"'
             n_rows = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             out.append(f"Table {table} ({n_rows} rows)")
+            columns = [row[1] for row in conn.execute(f"PRAGMA table_info({t})")]
             for _, col, col_type, *_ in conn.execute(f"PRAGMA table_info({t})"):
                 c = f'"{col}"'
                 if col_type == "TEXT":
@@ -271,4 +308,60 @@ def describe_schema(db_path: Path, max_values: int = 12) -> str:
                     lo, hi = conn.execute(f"SELECT MIN({c}), MAX({c}) FROM {t}").fetchone()
                     profile = f"range {_fmt(lo)} to {_fmt(hi)}"
                 out.append(f"  - {col} {col_type}: {profile}")
+            out.extend(_long_format_notes(conn, t, columns))
     return "\n".join(out)
+
+
+def _long_format_notes(conn: sqlite3.Connection, t: str, columns: list[str]) -> list[str]:
+    """Which metrics and which fiscal years each company actually has.
+
+    Why: in a long table, "SELECT value WHERE metric = 'gross_profit' AND
+    ticker = 'AMZN'" is valid SQL that silently returns nothing (Amazon
+    reports no gross profit line). And fiscal years differ by company:
+    Microsoft's latest is FY2026 (ended June 2026), Apple's FY2025. Listing
+    both up front lets the model write a query that works the first time,
+    and tells it the unit of each metric (EPS is USD per share, not USD).
+    """
+    notes: list[str] = []
+    if {"metric", "unit", "ticker"} <= set(columns):
+        notes.append("  Metrics (unit; companies reporting it):")
+        for metric, unit, n in conn.execute(
+            f"SELECT metric, unit, COUNT(DISTINCT ticker) FROM {t} "
+            "GROUP BY metric, unit ORDER BY metric"
+        ):
+            notes.append(f"    {metric} ({unit}; {n})")
+    if {"ticker", "fiscal_year"} <= set(columns):
+        has_metric, has_company = "metric" in columns, "company" in columns
+        all_metrics = (
+            {r[0] for r in conn.execute(f"SELECT DISTINCT metric FROM {t}")}
+            if has_metric
+            else set()
+        )
+        notes.append("  Companies (fiscal years present; metrics they don't report):")
+        for (ticker,) in conn.execute(f"SELECT DISTINCT ticker FROM {t} ORDER BY ticker"):
+            years = [
+                str(r[0])
+                for r in conn.execute(
+                    f"SELECT DISTINCT fiscal_year FROM {t} WHERE ticker = ? ORDER BY 1", (ticker,)
+                )
+            ]
+            line = f"    {ticker}"
+            if has_company:
+                line += (
+                    " = "
+                    + conn.execute(
+                        f"SELECT company FROM {t} WHERE ticker = ? LIMIT 1", (ticker,)
+                    ).fetchone()[0]
+                )
+            line += f": FY {', '.join(years)}"
+            if has_metric:
+                present = {
+                    r[0]
+                    for r in conn.execute(
+                        f"SELECT DISTINCT metric FROM {t} WHERE ticker = ?", (ticker,)
+                    )
+                }
+                if missing := sorted(all_metrics - present):
+                    line += f"; no {', '.join(missing)}"
+            notes.append(line)
+    return notes

@@ -8,17 +8,19 @@ from analyst.config import Settings
 from analyst.graph import DATA, RAG, build_graph
 from analyst.llm import FakeChatModel
 from analyst.tools.sql import DataNotReadyError, run_sql
+from tests.edgar_fixture import FACTS
 
-QUESTION = "Summarize the company's revenue trend and key risks, with sources"
+QUESTION = "Summarize Kestrel Ridge's revenue trend and key risks, with sources"
+ROWS = sum(len(metrics) for metrics in FACTS.values())
 
 REVENUE_BY_YEAR = (
-    "SELECT year, ROUND(SUM(revenue_usd) / 1e6, 1) AS revenue_musd "
-    "FROM quarterly_sales GROUP BY year ORDER BY year"
+    "SELECT fiscal_year, ROUND(value / 1e6, 1) AS revenue_musd FROM financials "
+    "WHERE ticker = 'KRO' AND metric = 'revenue' ORDER BY fiscal_year"
 )
 GROWTH = (
-    "WITH y AS (SELECT year, SUM(revenue_usd) AS rev FROM quarterly_sales GROUP BY year) "
-    "SELECT year, ROUND(100.0 * (rev - LAG(rev) OVER (ORDER BY year)) "
-    "/ LAG(rev) OVER (ORDER BY year), 1) AS yoy_growth_pct FROM y"
+    "SELECT fiscal_year, ROUND(100.0 * (value - LAG(value) OVER (ORDER BY fiscal_year)) "
+    "/ LAG(value) OVER (ORDER BY fiscal_year), 1) AS yoy_growth_pct FROM financials "
+    "WHERE ticker = 'KRO' AND metric = 'revenue'"
 )
 
 
@@ -72,15 +74,14 @@ def test_schema_with_real_values_goes_into_the_sql_prompt(sample_db):
     agent, llm = _agent(sample_db, _plan(("Revenue", REVENUE_BY_YEAR)), "Revenue [Q1].")
     agent(_task())
     plan_prompt = _text(llm.history[0])
-    assert "'Asia-Pacific'" in plan_prompt and "range 2022 to 2024" in plan_prompt
+    assert "'KRO'" in plan_prompt and "fiscal_year INTEGER: range 2022 to 2024" in plan_prompt
+    assert "BFA = Bluefin Analytics Inc.: FY 2024; no gross_profit" in plan_prompt
 
 
 def test_failed_query_is_repaired_with_the_error_message(sample_db):
     agent, llm = _agent(
         sample_db,
-        _plan(
-            ("Net revenue by year", "SELECT year, SUM(revnue) FROM quarterly_sales GROUP BY year")
-        ),
+        _plan(("Net revenue by year", "SELECT fiscal_year, revnue FROM financials")),
         {"purpose": "Net revenue by year", "sql": REVENUE_BY_YEAR},  # the repair
         "Revenue reached $466.7 million in 2024 [Q1].",
     )
@@ -95,24 +96,24 @@ def test_failed_query_is_repaired_with_the_error_message(sample_db):
 def test_write_attempt_is_rejected_then_repaired(sample_db):
     agent, _ = _agent(
         sample_db,
-        _plan(("Clean data", "DELETE FROM quarterly_sales WHERE year = 2022")),
+        _plan(("Clean data", "DELETE FROM financials WHERE fiscal_year = 2022")),
         {"purpose": "Revenue", "sql": REVENUE_BY_YEAR},
         "Revenue [Q1].",
     )
     out = agent(_task())
     assert out["findings"][0]["source_ids"]
-    assert run_sql("SELECT COUNT(*) FROM quarterly_sales", sample_db).rows == [(288,)]
+    assert run_sql("SELECT COUNT(*) FROM financials", sample_db).rows == [(ROWS,)]
 
 
 def test_gives_up_after_max_repairs_without_touching_the_data(sample_db):
-    bad = {"purpose": "x", "sql": "DROP TABLE quarterly_sales"}
+    bad = {"purpose": "x", "sql": "DROP TABLE financials"}
     agent, llm = _agent(sample_db, {"queries": [bad]}, *([bad] * MAX_REPAIRS))
     out = agent(_task())
 
     assert out["findings"][0]["summary"].startswith("ERROR: every SQL query failed")
     assert out["sources"] == {}
     assert len(llm.history) == 1 + MAX_REPAIRS  # bounded: plan + repairs, no interpretation
-    assert run_sql("SELECT COUNT(*) FROM quarterly_sales", sample_db).rows == [(288,)]
+    assert run_sql("SELECT COUNT(*) FROM financials", sample_db).rows == [(ROWS,)]
 
 
 def test_one_failing_query_does_not_sink_the_others(sample_db):

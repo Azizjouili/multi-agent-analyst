@@ -22,7 +22,7 @@ from analyst.state import AnalystState, Source
 log = logging.getLogger("analyst.agents.finalize")
 
 DESCRIPTION_CHARS = 160
-TYPE_LABELS = {"rag": "internal document", "data": "SQL query", "web": "web page"}
+TYPE_LABELS = {"rag": "document", "data": "SQL query", "web": "web page"}
 
 
 def finalize(state: AnalystState) -> dict:
@@ -65,10 +65,31 @@ def describe(source: Source) -> str:
     if kind == "web":
         return f"<{locator}>"
     if kind == "rag":
-        doc, _, page = locator.partition("#p")  # "annual_report_2024.pdf#p4"
-        return f"{doc}, page {page}" if page else doc
+        return describe_passage(locator)
     # data: the query itself is the citation, so a reader can re-run it.
     sql = " ".join(locator.split())
     if len(sql) > DESCRIPTION_CHARS:
         sql = sql[: DESCRIPTION_CHARS - 3] + "..."
     return f"`{sql}`"
+
+
+def describe_passage(locator: str) -> str:
+    """ "AAPL_2024.html#item-1a/c3-4" -> "AAPL_2024.html, Item 1A, chunks 3-4".
+
+    The title already names the company, fiscal year and Item; this line says
+    which file to open and which chunks of the Item the evidence came from.
+    It also reads the page locators of runs saved before the 10-K corpus
+    ("annual_report_2024.pdf#p4" -> "annual_report_2024.pdf, page 4").
+    """
+    doc, _, rest = locator.partition("#")
+    anchor, _, span = rest.partition("/")
+    if anchor.startswith("item-"):
+        where = f"Item {anchor.removeprefix('item-').upper()}"
+    elif anchor[:1] == "p" and anchor[1:].isdigit():
+        where = f"page {anchor[1:]}"
+    else:
+        where = anchor
+    if span.startswith("c"):
+        chunks = span[1:]
+        where += f", {'chunks' if '-' in chunks else 'chunk'} {chunks}"
+    return f"{doc}, {where}" if where else doc

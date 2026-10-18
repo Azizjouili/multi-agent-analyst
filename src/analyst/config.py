@@ -8,10 +8,10 @@ error instead of deep inside an agent run.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Repo root = two levels above src/analyst/. Paths are anchored here so the
 # app works no matter which directory it is launched from.
@@ -53,9 +53,15 @@ class Settings(BaseSettings):
     # that falls on a chunk boundary is complete in at least one chunk.
     chunk_overlap: int = Field(120, ge=0)
     retrieval_k: int = Field(5, gt=0)
+    # Which 10-K Items to index (see rag/loader.py for why Item 8 is left out
+    # by default). Env: EDGAR_ITEMS=1,1A,3,7,7A,8
+    # NoDecode: read the env var as plain "1,1A,7" rather than as JSON.
+    edgar_items: Annotated[tuple[str, ...], NoDecode] = ("1", "1A", "3", "7", "7A")
 
     # --- Data analysis -----------------------------------------------------
-    datasets_dir: Path = PROJECT_ROOT / "data" / "datasets"
+    datasets_dir: Path = (
+        PROJECT_ROOT / "data" / "datasets"
+    )  # financials.csv (scripts/fetch_edgar.py)
     db_path: Path = PROJECT_ROOT / "data" / "analyst.db"
     # Guardrails for LLM-written SQL. The row cap keeps one careless
     # `SELECT *` from flooding the prompt. The timeout stops a runaway query
@@ -105,6 +111,13 @@ class Settings(BaseSettings):
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
+
+    @field_validator("edgar_items", mode="before")
+    @classmethod
+    def _split_items(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(i.strip().upper() for i in value.split(",") if i.strip())
+        return value
 
     @property
     def langfuse_enabled(self) -> bool:

@@ -10,11 +10,12 @@ can show which prompt change moved a score.
 _SPECIALISTS = """\
 Specialists (each sees ONLY the overall question and its own instruction):
 - web:  searches the public internet: industry trends, competitors, market data, \
-regulation, news. It cannot see the company's internal documents or data.
-- rag:  searches the company's internal documents: {docs}
-        Best for narrative facts: strategy, risks, events, explanations, guidance.
-- data: runs SQL over the company's dataset: {tables}
-        Best for exact figures: totals, trends, breakdowns, growth rates, shares."""
+regulation, news. It cannot see the indexed filings or the financials database.
+- rag:  searches the companies' annual reports (SEC 10-K filings, by Item: business, \
+risk factors, legal proceedings, MD&A, market risk): {docs}
+        Best for narrative facts: strategy, risks, events, explanations, outlook.
+- data: runs SQL over annual financials reported in those 10-Ks (XBRL): {tables}
+        Best for exact figures: revenue, income, cash flow, balance sheet, growth, ratios."""
 
 SUPERVISOR_PLAN_SYSTEM = (
     """\
@@ -27,12 +28,12 @@ question into 2 to {max_subtasks} sub-tasks, each assigned to exactly one specia
 
 Rules:
 - Every part of the question must be covered by at least one sub-task.
-- Each instruction must be self-contained and specific: what to find, for which \
-period and scope (e.g. "Net revenue by year 2022-2024 with year-over-year growth, and \
-which regions and channels drove the change").
-- Use data for numbers, rag for internal explanations and risks, and web only for \
-outside context (industry, market, regulation). Never ask web for internal company \
-figures.
+- Each instruction must be self-contained and specific: which company (name and \
+ticker), what to find, for which fiscal years (e.g. "Apple (AAPL) revenue and net \
+income for fiscal years 2023-2025, with year-over-year growth").
+- Use data for numbers, rag for explanations and risks as the companies describe them \
+in their 10-Ks, and web only for outside context (industry, market, regulation). Never \
+ask web for figures that are in the financials database.
 - No overlapping sub-tasks. Never assign work to a specialist marked unavailable."""
 )
 
@@ -91,30 +92,33 @@ claims, missing key figures that ARE in the findings, poor structure, wrong emph
 research is needed. List the missing topics as short, searchable descriptions.
 
 feedback: specific, actionable points the writer can apply (at most 6), e.g. "Lead the \
-Summary with yearly revenue: $412.6M (2022), $393.1M (2023), $466.7M (2024)."
+Summary with revenue for each fiscal year: $383.29B (FY2023), $391.04B (FY2024)."
 missing_topics: only for "research" (at most 3); otherwise empty."""
 
 RAG_QUERY_SYSTEM = """\
-You plan searches over a company's internal documents (annual reports). The search \
+You plan searches over companies' annual reports (SEC 10-K filings). The search \
 engine combines keyword matching with semantic similarity.
 
 Given a research sub-task, return:
-- queries: 1 to 3 short search queries (3-8 words each). Use words likely to appear in \
-an annual report, e.g. "risk factors", "net revenue", "gross margin", "outlook". Cover \
-different angles of the sub-task rather than rephrasing the same one.
-- years: the report years to restrict the search to, ONLY if the sub-task is explicitly \
-about specific years (e.g. "risks in 2024" -> [2024]). Leave it empty for trends across \
-years, comparisons over the whole period, or when no year is mentioned.
+- queries: 1 to 3 short search queries (3-8 words each). Always include the company \
+name, and use words likely to appear in a 10-K, e.g. "risk factors", "net sales", \
+"gross margin", "competition", "supply chain". Cover different angles of the sub-task \
+rather than rephrasing the same one.
+- years: the fiscal years to restrict the search to, ONLY if the sub-task is explicitly \
+about specific years (e.g. "risks in fiscal 2024" -> [2024]). Leave it empty for trends \
+across years, comparisons over the whole period, or when no year is mentioned.
 
-Available report years: {years}."""
+Available fiscal years: {years}."""
 
 RAG_ANSWER_SYSTEM = """\
-You answer a research sub-task using ONLY the numbered excerpts from internal documents.
+You answer a research sub-task using ONLY the numbered excerpts from 10-K filings.
 
 Rules:
 1. End every factual sentence with citations to the excerpts that support it, like [D1] \
 or [D1, D3].
-2. Use only facts stated in the excerpts. No outside knowledge. Copy numbers exactly.
+2. Use only facts stated in the excerpts. No outside knowledge. Copy numbers exactly. \
+Each excerpt names its company and fiscal year: use only excerpts about the company and \
+years the sub-task asks about, and say which fiscal year a fact comes from.
 3. If the excerpts do not answer the sub-task, reply exactly: NOT FOUND: <one sentence \
 on what is missing>.
 4. At most 150 words.
@@ -130,13 +134,17 @@ Database schema (with the actual values and ranges in each column):
 Write 1 to 3 queries. Each has a short purpose and one SQLite SELECT statement.
 Rules:
 - Read-only: a single SELECT (or WITH ... SELECT) per query. Anything else is rejected.
-- Aggregate in SQL (SUM, GROUP BY) instead of returning raw rows.
+- The financials table is long format: one row per company (ticker), fiscal_year and \
+metric. Always filter on metric, and pivot to compare metrics: \
+MAX(CASE WHEN metric = 'net_income' THEN value END) ... GROUP BY ticker, fiscal_year.
 - Do ALL arithmetic in SQL: growth rates, shares, margins, differences. For example, \
-year-over-year growth with a window function: \
-ROUND(100.0 * (rev - LAG(rev) OVER (ORDER BY year)) / LAG(rev) OVER (ORDER BY year), 1).
-- Express money in millions with clear aliases: ROUND(SUM(revenue_usd) / 1e6, 1) AS \
-revenue_musd.
-- Use text values exactly as listed in the schema (e.g. 'Asia-Pacific').
+year-over-year growth with a window function: ROUND(100.0 * (value - LAG(value) OVER \
+(PARTITION BY ticker ORDER BY fiscal_year)) / LAG(value) OVER (PARTITION BY ticker ORDER \
+BY fiscal_year), 1).
+- Express USD amounts in billions with clear aliases: ROUND(value / 1e9, 2) AS \
+revenue_busd. EPS (unit USD/shares) is already per share: never scale it.
+- Use text values exactly as listed in the schema (e.g. ticker = 'AAPL', metric = \
+'revenue'). Fiscal years differ by company; use the years the schema lists for it.
 - Prefer one well-designed query; add more only for genuinely different angles."""
 
 DATA_SQL_FIX_SYSTEM = """\
@@ -155,8 +163,8 @@ Rules:
 1. End every factual sentence with citations to the results that support it, like [Q1] \
 or [Q1, Q2].
 2. Copy numbers exactly as they appear in the results, with their units (e.g. \
-"$466.7 million" for revenue_musd = 466.7). Do NOT compute new numbers. If a figure \
-isn't in the results, don't state it.
+"$391.04 billion" for revenue_busd = 391.04), and name the fiscal year (e.g. FY2024). \
+Do NOT compute new numbers. If a figure isn't in the results, don't state it.
 3. Describe trends and comparisons the numbers show (rising, falling, largest, ...).
 4. At most 150 words."""
 

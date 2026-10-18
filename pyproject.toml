@@ -27,19 +27,14 @@ dependencies = [
     # --- API (step 13) ---
     "fastapi>=0.115",              # HTTP API: start runs, poll status, submit the human review
     "uvicorn>=0.30",               # ASGI server that runs the FastAPI app (scripts/serve.py)
+    # --- SEC EDGAR corpus ---
+    "pyyaml>=6.0",                 # data/corpus/manifest.yaml (fetch_edgar) and evals/questions.yaml
 ]
 
 [dependency-groups]
-# Its own group so the Docker image can generate the sample PDFs without
-# pulling in the test tooling (see Dockerfile).
-sample-data = [
-    "reportlab>=4.0",              # only used by scripts/make_sample_data.py to write PDFs
-]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
-    "pyyaml>=6.0",                 # only used by evals/ to read questions.yaml
-    { include-group = "sample-data" },
 ]
 
 # Why a CPU-only torch index: the default Linux torch wheel bundles ~2 GB of
@@ -62,7 +57,7 @@ packages = ["src/analyst"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]  # lets tests import scripts/make_sample_data.py
+pythonpath = ["."]  # lets tests import scripts/fetch_edgar.py and evals/
 # Why opt-in markers: live tests spend real free-tier quota, and model tests
 # download ~90 MB the first time. Run them with `-m live` / `-m model`.
 addopts = "-m 'not live and not model'"

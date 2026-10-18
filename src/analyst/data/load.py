@@ -1,5 +1,8 @@
 """Load every CSV in data/datasets/ into a SQLite database (one table per file).
 
+The main one is financials.csv, the XBRL line items written by
+scripts/fetch_edgar.py: one row per (company, fiscal year, metric).
+
     uv run python -m analyst.data.load [--datasets-dir DIR] [--db PATH]
 
 Why SQLite:
@@ -25,7 +28,7 @@ from analyst.config import get_settings
 def _infer_type(values: list[str]) -> str:
     """Pick the narrowest SQLite type that fits every non-empty value.
 
-    Why bother: CSV has no types. Stored as TEXT, "revenue_usd" would sort as
+    Why bother: CSV has no types. Stored as TEXT, "value" would sort as
     text ("100" < "99") and SUM() would behave unexpectedly. Real numeric
     columns make the SQL the LLM writes behave as intended.
     """
@@ -77,8 +80,8 @@ def load_datasets(datasets_dir: Path, db_path: Path) -> dict[str, int]:
     csv_files = sorted(datasets_dir.glob("*.csv"))
     if not csv_files:
         raise SystemExit(
-            f"No CSV files in {datasets_dir}. Generate the samples first: "
-            "uv run python scripts/make_sample_data.py"
+            f"No CSV files in {datasets_dir}. Fetch the SEC data first: "
+            "uv run python scripts/fetch_edgar.py"
         )
 
     # Build into a temporary file, then swap it in with one atomic rename. A

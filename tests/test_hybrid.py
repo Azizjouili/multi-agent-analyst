@@ -67,12 +67,12 @@ def test_rrf_ignores_score_scale():
 # Metadata filters
 # ---------------------------------------------------------------------------
 def test_matches_equality_membership_and_missing_keys():
-    rec = {"year": 2024, "doc": "a.pdf"}
+    rec = {"year": 2024, "doc": "a.html"}
     assert matches(rec, None)
     assert matches(rec, {"year": 2024})
     assert matches(rec, {"year": [2023, 2024]})
     assert not matches(rec, {"year": 2023})
-    assert not matches({"doc": "a.pdf"}, {"year": 2024})  # missing field never matches
+    assert not matches({"doc": "a.html"}, {"year": 2024})  # missing field never matches
 
 
 def test_vector_search_filters_before_top_k():
@@ -114,7 +114,10 @@ class FixedQueryEmbedder:
 
 
 def _record(i, text):
-    return {"id": f"c{i}", "doc": "d.pdf", "page": i, "index": 0, "text": text, "title": ""}
+    return {
+        "id": f"c{i}", "doc": "d.html", "anchor": f"item-{i}", "section": f"Item {i}",
+        "index": 0, "text": text, "title": "",
+    }  # fmt: skip
 
 
 def test_hybrid_prefers_documents_both_methods_agree_on():
@@ -148,9 +151,20 @@ def test_retriever_lists_years_in_index(retriever):
     assert retriever.years == [2022, 2023, 2024]
 
 
-def test_key_risks_in_2024_ranks_the_2024_risk_page_first(retriever):
-    top = retriever.retrieve("key risks in 2024", k=1)[0].record
-    assert (top["doc"], top["page"]) == ("annual_report_2024.pdf", 4)
+def test_context_header_makes_item_and_company_searchable(retriever):
+    # The risk-factor chunks never say "risk factors" or "Kestrel": only their
+    # context header ("Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A.
+    # Risk Factors") ties them to the Item and the company.
+    hits = retriever.retrieve("risk factors", k=5, mode="keyword")
+    assert hits and all(h.record["anchor"] == "item-1a" for h in hits)
+    # Every chunk of a filing carries its company's name, so a name finds them all.
+    hits = retriever.retrieve("Bluefin", k=10, mode="keyword")
+    assert {h.record["doc"] for h in hits} == {"BFA_2024.html"} and len(hits) == 5
+
+
+def test_ticker_filter_restricts_every_hit(retriever):
+    hits = retriever.retrieve("risk factors", k=5, filters={"ticker": "BFA"})
+    assert hits and {h.record["doc"] for h in hits} == {"BFA_2024.html"}
 
 
 def test_year_filter_restricts_every_hit(retriever):
@@ -160,8 +174,8 @@ def test_year_filter_restricts_every_hit(retriever):
 
 def test_multiple_queries_are_fused(retriever):
     hits = retriever.retrieve(["tariff policy", "factory in Mexico"], k=1)
-    assert hits[0].record["doc"] == "annual_report_2024.pdf"
-    assert hits[0].record["page"] == 4
+    assert hits[0].record["doc"] == "KRO_2024.html"
+    assert hits[0].record["anchor"] == "item-1a"
 
 
 def test_filter_matching_nothing_returns_empty(retriever):
@@ -181,5 +195,6 @@ def test_real_model_hybrid_beats_vector_on_year_query(sample_data, tmp_path):
     build_index(out / "docs", tmp_path, embedder, chunk_size=800, chunk_overlap=120)
     r = Retriever(VectorStore.load(tmp_path), embedder)
 
-    top = r.retrieve("key risks in 2024", k=1, mode="hybrid")[0].record
-    assert (top["doc"], top["page"]) == ("annual_report_2024.pdf", 4)
+    top = r.retrieve("Kestrel risk factors 2024", k=1, mode="hybrid", filters={"year": 2024})
+    top = top[0].record
+    assert (top["doc"], top["anchor"]) == ("KRO_2024.html", "item-1a")

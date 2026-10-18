@@ -19,6 +19,13 @@ data/
 *.egg-info/
 dist/
 
+# Frontend: the image builds it from source with `npm ci` in its own stage.
+# A local node_modules (possibly Windows binaries, hundreds of MB) or a stale
+# dist must never leak into that build or into src/.
+frontend/node_modules/
+frontend/dist/
+src/analyst/static/
+
 # Not needed at runtime.
 tests/
 evals/

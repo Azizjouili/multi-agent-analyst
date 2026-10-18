@@ -1,4 +1,4 @@
-"""Build the vector index from the PDFs in data/docs.
+"""Build the vector index from the documents in data/docs (10-K filings and PDFs).
 
     uv run python -m analyst.rag.index [--docs-dir DIR] [--index-dir DIR]
                                        [--chunk-size N] [--chunk-overlap N]
@@ -6,7 +6,7 @@
 Indexing is a separate offline step, not something done at query time: it's
 the slow part (loading the model, embedding every chunk), and documents change
 far less often than questions are asked. Rerun it whenever the PDFs, the
-embedding model or the chunking settings change.
+embedding model, the chunking settings or EDGAR_ITEMS change.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ import time
 from pathlib import Path
 
 from analyst.config import get_settings
-from analyst.rag.chunker import chunk_pages
+from analyst.rag.chunker import chunk_sections
 from analyst.rag.embedder import Embedder, get_embedder
-from analyst.rag.loader import load_dir
+from analyst.rag.loader import DEFAULT_ITEMS, doc_files, load_dir
 from analyst.rag.vector_store import VectorStore
 
 
@@ -33,14 +33,15 @@ def build_index(
     embedder: Embedder,
     chunk_size: int,
     chunk_overlap: int,
+    items: tuple[str, ...] = DEFAULT_ITEMS,
 ) -> dict:
-    pages = load_dir(docs_dir)
-    if not pages:
+    sections = load_dir(docs_dir, items)
+    if not sections:
         raise SystemExit(
-            f"No PDF text found in {docs_dir}. Generate the samples first: "
-            "uv run python scripts/make_sample_data.py"
+            f"No document text found in {docs_dir}. Fetch the SEC filings first: "
+            "uv run python scripts/fetch_edgar.py"
         )
-    chunks = chunk_pages(pages, chunk_size, chunk_overlap)
+    chunks = chunk_sections(sections, chunk_size, chunk_overlap)
 
     t0 = time.perf_counter()
     vectors = embedder.embed_documents([c.embedding_text for c in chunks])
@@ -55,12 +56,20 @@ def build_index(
         extra={
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
-            "files": {p.name: _sha256(p) for p in sorted(docs_dir.glob("*.pdf"))},
+            "items": list(items),
+            # Only documents that produced text: an HTML file with none of the
+            # selected Items was not really indexed.
+            "files": {
+                p.name: _sha256(p)
+                for p in doc_files(docs_dir)
+                if p.name in {s.doc for s in sections}
+            },
         },
     )
     return {
-        "documents": len({p.doc for p in pages}),
-        "pages": len(pages),
+        "documents": len({s.doc for s in sections}),
+        "companies": len({s.ticker for s in sections if s.ticker}),
+        "sections": len(sections),
         "chunks": len(chunks),
         "avg_chunk_chars": round(sum(len(c.text) for c in chunks) / len(chunks)),
         "dim": store.dim,
@@ -77,13 +86,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--chunk-overlap", type=int, default=s.chunk_overlap)
     args = parser.parse_args(argv)
 
-    print(f"Indexing {args.docs_dir} with {s.embedding_model} ...")
+    print(f"Indexing {args.docs_dir} (10-K Items {', '.join(s.edgar_items)}) "
+          f"with {s.embedding_model} ...")  # fmt: skip
     stats = build_index(
         args.docs_dir,
         args.index_dir,
         get_embedder(s.embedding_model),
         args.chunk_size,
         args.chunk_overlap,
+        s.edgar_items,
     )
     print(f"Saved index to {args.index_dir}")
     for key, value in stats.items():

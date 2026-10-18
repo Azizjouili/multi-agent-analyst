@@ -55,10 +55,10 @@ class Retriever:
         self.store = store
         self.embedder = embedder
         # BM25 is built from the stored records when the retriever is created
-        # rather than saved to disk. For a few hundred chunks that takes
-        # milliseconds and can never go stale relative to the vectors.
+        # rather than saved to disk. For ~10,000 chunks that takes a second or
+        # two, once per process, and it can never go stale relative to the vectors.
         self.bm25 = BM25(
-            [contextual_text(r.get("title", ""), r["page"], r["text"]) for r in store.records]
+            [contextual_text(r.get("title", ""), r["section"], r["text"]) for r in store.records]
         )
 
     @classmethod
@@ -69,7 +69,7 @@ class Retriever:
 
     @property
     def years(self) -> list[int]:
-        """Report years present in the index. The agent only filters on these."""
+        """Fiscal or report years in the index. The agent only filters on these."""
         return sorted({r["year"] for r in self.store.records if r.get("year")})
 
     def retrieve(

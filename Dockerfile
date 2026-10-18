@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1.7
 #
-# Two stages:
+# Three stages:
+#   frontend builds the React UI (Vite) into static files
 #   builder  installs the dependencies with uv and downloads the embedding model
-#   runtime  copies only the virtualenv, the model and the source: no uv, no
-#            build tools, no caches. Smaller image, smaller attack surface.
+#   runtime  copies only the virtualenv, the model, the source and the built UI:
+#            no uv, no Node, no build tools, no caches. Smaller image, smaller
+#            attack surface.
 #
 #   docker compose build          (or: docker build -t multi-agent-analyst .)
 #
@@ -14,6 +16,23 @@ ARG PYTHON_VERSION=3.12
 
 # uv ships as a static binary in its own image; pinned so builds are repeatable.
 FROM ghcr.io/astral-sh/uv:0.12.22 AS uv
+
+# ---------------------------------------------------------------------------
+# Frontend
+# ---------------------------------------------------------------------------
+# Node exists only in this stage: the runtime serves the built files with
+# FastAPI, so it never needs Node. Node 22 because Vite needs ^20.19 or >=22.12.
+FROM node:22-slim AS frontend
+WORKDIR /frontend
+
+# Manifests first, like the Python deps below: `npm ci` (exact versions from
+# package-lock.json) only re-runs when they change, not on every UI edit.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
+
+COPY frontend/ ./
+RUN npm run build
 
 # ---------------------------------------------------------------------------
 # Builder
@@ -34,11 +53,10 @@ WORKDIR /app
 # pyproject.toml or uv.lock change, not on every source edit, and it's the slow
 # one (torch). --frozen: install exactly what uv.lock says, which includes the
 # CPU-only torch wheel (pyproject pins torch to the PyTorch CPU index), so no
-# 2 GB of CUDA libraries. --no-dev skips pytest/ruff; the sample-data group
-# (reportlab) lets the indexer generate the demo PDFs.
+# 2 GB of CUDA libraries. --no-dev skips pytest/ruff.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --group sample-data --no-install-project
+    uv sync --frozen --no-dev --no-install-project
 
 # Then the project itself. Installed editable, pointing at /app/src. That
 # matters: config.py finds data/ relative to its own file, so the source must
@@ -46,7 +64,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY README.md ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --group sample-data
+    uv sync --frozen --no-dev
 
 # Download the embedding model at build time, into a known folder that the
 # runtime stage copies. With HF_HUB_OFFLINE=1 at runtime, the container never
@@ -81,6 +99,10 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /opt/hf /opt/hf
+# The built UI, inside the package where api.py looks for it (STATIC_DIR).
+# Copied last among the app files: a UI-only change rebuilds this layer and
+# leaves the large dependency layers above cached.
+COPY --from=frontend /frontend/dist /app/src/analyst/static
 COPY scripts ./scripts
 RUN mkdir -p /app/data && chown app:app /app/data
 

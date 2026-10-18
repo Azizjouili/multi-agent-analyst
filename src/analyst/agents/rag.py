@@ -1,4 +1,4 @@
-"""RAG agent: answers one sub-task from the private PDFs, with page-level citations.
+"""RAG agent: answers one sub-task from the indexed 10-K filings, with passage-level citations.
 
 Inside the node:
   1. plan     - the LLM rewrites the sub-task into 1-3 search queries and an optional
@@ -48,7 +48,7 @@ class RetrievalPlan(BaseModel):
 
 @dataclass(frozen=True)
 class Excerpt:
-    """One retrieved *page*, shown to the LLM as [label]."""
+    """One retrieved passage (a chunk, or adjacent chunks joined), shown to the LLM as [label]."""
 
     label: str  # "D1"
     source: Source
@@ -113,9 +113,9 @@ class RagAgent:
             log.info("rag[%s]: no hits for years=%s; retrying without filter", task["id"], years)
             hits = self.retriever.retrieve(queries, k=self.settings.retrieval_k)
 
-        excerpts = group_by_page(hits)
+        excerpts = group_by_section(hits)
         log.info(
-            "rag[%s]: queries=%s years=%s -> %d chunks on %d pages",
+            "rag[%s]: queries=%s years=%s -> %d chunks in %d passages",
             task["id"], queries, years or "all", len(hits), len(excerpts),
         )  # fmt: skip
         if not excerpts:
@@ -136,7 +136,7 @@ class RagAgent:
         if not used_ids and not summary.startswith("NOT FOUND"):
             log.warning("rag[%s]: answer has no valid citations", task["id"])
         # Return only the sources the answer actually cites. Retrieved but
-        # unused pages would be noise in the bibliography.
+        # unused passages would be noise in the bibliography.
         sources = [e.source for e in excerpts if e.source["id"] in used_ids]
         return _result(task["id"], summary, sources)
 
@@ -192,31 +192,65 @@ class RagAgent:
 # ---------------------------------------------------------------------------
 # Helpers (pure functions, unit-tested directly)
 # ---------------------------------------------------------------------------
-def group_by_page(hits: Sequence[Hit]) -> list[Excerpt]:
-    """Merge chunk hits into page-level excerpts, labelled D1, D2, ... in rank order.
+def group_by_section(hits: Sequence[Hit]) -> list[Excerpt]:
+    """Turn chunk hits into passages, labelled D1, D2, ... in rank order.
 
-    Why per page: citations point to pages ("annual_report_2024.pdf#p4"), so
-    two chunks from one page are one source. Merging also saves prompt tokens
-    when chunks overlap.
+    A passage is one chunk, or a run of *adjacent* chunks of the same section
+    (c3 and c4 of Apple's FY2024 Item 1A) joined back into the text they were
+    cut from, which also saves the prompt tokens of their overlap. Why not one
+    source per section, as for a PDF page: a 10-K Item runs to 100,000
+    characters, so "Item 1A" alone wouldn't tell a reader where to look. The
+    locator names the chunks:
+
+        AAPL_2024.html#item-1a/c3-4   titled "Apple Inc. (AAPL) 10-K FY2024, Item 1A. Risk Factors"
+
+    The source id is still the hash of the locator (state.make_source_id), so
+    it is the same on every run and survives revisions.
     """
-    pages: dict[tuple[str, int], list[dict]] = {}
-    for hit in hits:  # hits arrive best-first, so labels follow relevance
-        rec = hit.record
-        pages.setdefault((rec["doc"], rec["page"]), []).append(rec)
+    best_rank = {id(hit.record): rank for rank, hit in enumerate(hits)}  # hits arrive best-first
+    ordered = sorted(
+        (hit.record for hit in hits), key=lambda r: (r["doc"], r["anchor"], r["index"])
+    )
+    passages: list[list[dict]] = []
+    for rec in ordered:
+        prev = passages[-1] if passages else None
+        if (
+            prev
+            and (prev[-1]["doc"], prev[-1]["anchor"]) == (rec["doc"], rec["anchor"])
+            and rec["index"] == prev[-1]["index"] + 1
+            and len(_join([*prev, rec])) <= SNIPPET_CHARS  # the whole passage stays citable
+        ):
+            prev.append(rec)
+        else:
+            passages.append([rec])
+    passages.sort(key=lambda recs: min(best_rank[id(r)] for r in recs))  # labels follow relevance
 
     excerpts = []
-    for i, ((doc, page), recs) in enumerate(pages.items(), start=1):
-        recs.sort(key=lambda r: r["index"])  # restore reading order within the page
-        locator = f"{doc}#p{page}"
+    for i, recs in enumerate(passages, start=1):
+        first, last = recs[0], recs[-1]
+        span = f"c{first['index']}" + (f"-{last['index']}" if len(recs) > 1 else "")
+        locator = f"{first['doc']}#{first['anchor']}/{span}"
         source: Source = {
             "id": make_source_id("rag", locator),
             "kind": "rag",
-            "title": f"{recs[0].get('title') or doc}, p. {page}",
+            "title": f"{first.get('title') or first['doc']}, {first['section']}",
             "locator": locator,
-            "snippet": "\n".join(r["text"] for r in recs)[:SNIPPET_CHARS],
+            "snippet": _join(recs)[:SNIPPET_CHARS],
         }
         excerpts.append(Excerpt(label=f"D{i}", source=source))
     return excerpts
+
+
+def _join(recs: Sequence[dict]) -> str:
+    """Concatenate adjacent chunks, dropping the overlap the chunker repeated."""
+    text = recs[0]["text"]
+    for rec in recs[1:]:
+        nxt = rec["text"]
+        # The next chunk starts with up to ~chunk_overlap characters of this
+        # one. Find the longest such prefix so it isn't printed twice.
+        k = next((n for n in range(min(len(text), len(nxt)), 0, -1) if text.endswith(nxt[:n])), 0)
+        text = text + nxt[k:] if k else f"{text}\n{nxt}"
+    return text
 
 
 def _dedupe(items: list[str]) -> list[str]:

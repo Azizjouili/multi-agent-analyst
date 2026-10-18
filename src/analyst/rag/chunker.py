@@ -14,38 +14,41 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from analyst.rag.loader import Page
+from analyst.rag.loader import Section
 
 # Largest boundary first. "" means "cut anywhere", the last resort for text
 # with no spaces at all (e.g. a long URL).
 SEPARATORS = ("\n\n", "\n", ". ", " ", "")
 
 
-def contextual_text(title: str, page: int, text: str) -> str:
+def contextual_text(title: str, section: str, text: str) -> str:
     """The text that gets *searched*: a context header plus the chunk.
 
-    Why: a chunk of a "Risk Factors" page may not say which company or year it
-    belongs to, because that was only in the footer or title. Without the
-    header, the risk pages from every year look nearly identical, and "risks in
-    2024" can't find the 2024 one. Both the embedding and the BM25 index use
-    this text, while the stored `text` stays clean for prompts and citations.
+    Why: a chunk of a "Risk Factors" section rarely says which company or year
+    it belongs to; that was only on the cover page. Without the header, the
+    risk sections of twelve companies and three years look nearly identical,
+    and "Apple's risks in 2024" can't find Apple's FY2024 one. Both the
+    embedding and the BM25 index use this text, while the stored `text` stays
+    clean for prompts and citations.
     """
-    return f"{title}, page {page}\n{text}" if title else text
+    return f"{title}, {section}\n{text}" if title else text
 
 
 @dataclass(frozen=True)
 class Chunk:
-    id: str  # "annual_report_2024.pdf#p4-c1": unique and stable across rebuilds
+    id: str  # "AAPL_2024.html#item-1a-c12": unique and stable across rebuilds
     doc: str
-    page: int
-    index: int  # position within the page
+    anchor: str  # the section's key within the doc: "item-1a", or "p4" for a PDF page
+    section: str  # the section's citable label: "Item 1A. Risk Factors", "page 4"
+    index: int  # position within the section: the "chunk offset" in citations
     text: str
     title: str = ""
     year: int | None = None
+    ticker: str | None = None
 
     @property
     def embedding_text(self) -> str:
-        return contextual_text(self.title, self.page, self.text)
+        return contextual_text(self.title, self.section, self.text)
 
     def to_record(self) -> dict:
         return asdict(self)
@@ -122,25 +125,27 @@ def _tail(text: str, budget: int) -> str:
     return ""  # no clean boundary within the budget: skip the overlap
 
 
-def chunk_pages(pages: list[Page], size: int = 800, overlap: int = 120) -> list[Chunk]:
-    """Chunk each page separately.
+def chunk_sections(sections: list[Section], size: int = 800, overlap: int = 120) -> list[Chunk]:
+    """Chunk each section (a 10-K Item or a PDF page) separately.
 
-    Trade-off: a sentence that crosses a page break ends up in two chunks. In
-    return, every chunk has exactly one page number, so citations are always
-    correct. For cited reports, that is the better deal.
+    Trade-off: a sentence that crosses a section boundary ends up in two
+    chunks. In return, every chunk belongs to exactly one Item or page, so
+    citations are always correct. For cited reports, that is the better deal.
     """
     chunks: list[Chunk] = []
-    for page in pages:
-        for i, text in enumerate(split_text(page.text, size, overlap)):
+    for sec in sections:
+        for i, text in enumerate(split_text(sec.text, size, overlap)):
             chunks.append(
                 Chunk(
-                    id=f"{page.doc}#p{page.page}-c{i}",
-                    doc=page.doc,
-                    page=page.page,
+                    id=f"{sec.doc}#{sec.anchor}-c{i}",
+                    doc=sec.doc,
+                    anchor=sec.anchor,
+                    section=sec.label,
                     index=i,
                     text=text,
-                    title=page.title,
-                    year=page.year,
+                    title=sec.title,
+                    year=sec.year,
+                    ticker=sec.ticker,
                 )
             )
     return chunks

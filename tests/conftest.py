@@ -61,16 +61,20 @@ def _no_network(request, monkeypatch):
 
 @pytest.fixture(scope="session")
 def sample_data(tmp_path_factory):
-    """The synthetic company data, generated once per test session into a temp dir."""
-    from scripts import make_sample_data as gen
+    """A tiny synthetic corpus in SEC EDGAR's formats (see tests/edgar_fixture.py).
+
+    Returns (directory, filings). Never the real corpus: tests must pass on a
+    fresh clone, offline, in seconds.
+    """
+    from tests import edgar_fixture
 
     out = tmp_path_factory.mktemp("data")
-    return out, gen.generate(out)
+    return out, edgar_fixture.generate(out)
 
 
 @pytest.fixture(scope="session")
 def sample_db(sample_data, tmp_path_factory):
-    """The sample CSV loaded into a temporary SQLite database."""
+    """The fixture's financials.csv loaded into a temporary SQLite database."""
     from analyst.data.load import load_datasets
 
     out, _ = sample_data
@@ -81,7 +85,7 @@ def sample_db(sample_data, tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def sample_index(sample_data, tmp_path_factory):
-    """A vector index over the sample PDFs, built with the offline fake embedder."""
+    """A vector index over the fixture's 10-Ks, built with the offline fake embedder."""
     out, _ = sample_data
     index_dir = tmp_path_factory.mktemp("index")
     build_index(out / "docs", index_dir, BagOfWordsEmbedder(), chunk_size=800, chunk_overlap=120)

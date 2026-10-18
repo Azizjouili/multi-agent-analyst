@@ -3,10 +3,14 @@
 import json
 import re
 
+import pytest
+import yaml
+
 from analyst.agents import placeholders
+from analyst.config import PROJECT_ROOT
 from analyst.graph import CRITIC, DATA, RAG, SUPERVISOR, WEB, WRITER
-from evals import run_evals
-from scripts import make_sample_data as gen
+from evals import ground_truth, run_evals
+from scripts import fetch_edgar
 
 FAKE_NODES = {
     SUPERVISOR: placeholders.supervisor,
@@ -69,7 +73,7 @@ def test_harness_writes_results_json_with_fake_agents(tmp_path, capsys):
 
     hit, miss, crash = data["results"]
     expected_keys = {
-        "id", "question", "source", "thread_id", "answer_hit", "checks",
+        "id", "question", "source", "ground_truth", "thread_id", "answer_hit", "checks",
         "citation_coverage", "claim_sentences", "uncited_sentences",
         "no_invented_citations", "invented_source_ids", "dangling_citation_numbers",
         "sources_cited", "sources_collected", "revisions", "research_rounds",
@@ -120,28 +124,131 @@ def test_invented_citations_are_caught_in_draft_and_final_report():
     assert result["dangling_citation_numbers"] == [3]
 
 
-def test_ground_truth_matches_the_generated_data():
-    """Every expected pattern in questions.yaml must appear in the data we generate.
+def _matches(pattern, text):
+    return bool(re.search(pattern, text, re.IGNORECASE))
 
-    If someone changes the generator (seed, trends, narrative), this fails and
-    points at the questions whose ground truth went stale.
+
+def test_money_pattern_accepts_equivalent_wordings_and_rejects_wrong_figures():
+    p = ground_truth.money_pattern(391_035_000_000)
+    for ok in [
+        "$391.04 billion",
+        "391.0B",
+        "$391,035 million",
+        "Revenue | 391,035",
+        "$391 billion",
+    ]:
+        assert _matches(p, ok), ok
+    for wrong in ["$391.1 billion", "$1391.0 billion", "$383.29 billion", "391,036 million"]:
+        assert not _matches(p, wrong), wrong
+    small = ground_truth.money_pattern(466.7e6)
+    assert _matches(small, "$466.7 million") and _matches(small, "466.70M")
+    assert not _matches(small, "$466.8 million")
+
+
+def test_percent_and_per_share_patterns():
+    p = ground_truth.percent_pattern(114.2047)
+    assert all(_matches(p, s) for s in ["114.2%", "114.20 percent", "114%"])
+    assert not _matches(p, "114.3%") and not _matches(p, "4.2%")
+    small = ground_truth.percent_pattern(4.71)
+    assert _matches(small, "4.7%") and not _matches(small, "5%")  # no whole-percent slack below 10
+    eps = ground_truth.per_share_pattern(7.46)
+    assert _matches(eps, "$7.46") and not _matches(eps, "$17.46")
+
+
+FACT_QUESTIONS = """\
+- id: value
+  question: KRO revenue FY2024?
+  facts: [{ticker: KRO, fiscal_year: 2024, metric: revenue}]
+- id: growth
+  question: KRO revenue growth FY2024?
+  facts: [{ticker: KRO, fiscal_year: 2024, metric: revenue, compare_to: 2023}]
+- id: share
+  question: KRO R&D share FY2024?
+  facts: [{ticker: KRO, fiscal_year: 2024, metric: rd_expense, per: revenue}]
+  expect: ['research']
+"""
+
+
+def test_facts_resolve_into_patterns_from_the_financials_table(tmp_path, sample_data):
+    out, _ = sample_data
+    questions = tmp_path / "q.yaml"
+    questions.write_text(FACT_QUESTIONS, encoding="utf-8")
+    value, growth, share = run_evals.load_questions(questions, out / "datasets" / "financials.csv")
+
+    assert value.ground_truth == ["KRO FY2024 revenue = 466,700,000.00 USD"]
+    assert _matches(value.expect[0], "a record $466.7 million")
+    assert growth.ground_truth == ["KRO revenue FY2024 vs FY2023: +18.72%"]
+    assert _matches(growth.expect[0], "up 18.7% year over year")
+    assert share.expect[0] == "research"  # literal patterns are kept, facts appended
+    assert _matches(share.expect[1], "3.0% of revenue")  # 14.1 / 466.7
+
+
+def test_fact_missing_from_the_table_is_an_error(tmp_path, sample_data):
+    out, _ = sample_data
+    questions = tmp_path / "q.yaml"
+    questions.write_text(
+        "- id: x\n  question: q\n"
+        "  facts: [{ticker: BFA, fiscal_year: 2024, metric: gross_profit}]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ground_truth.GroundTruthError, match="no gross_profit for BFA FY2024"):
+        run_evals.load_questions(questions, out / "datasets" / "financials.csv")
+
+
+def test_facts_without_a_fetched_corpus_explain_what_to_run(tmp_path):
+    questions = tmp_path / "q.yaml"
+    questions.write_text(FACT_QUESTIONS, encoding="utf-8")
+    with pytest.raises(SystemExit, match="fetch_edgar"):
+        run_evals.load_questions(questions, tmp_path / "missing.csv")
+
+
+def test_question_file_is_well_formed():
+    """Offline structure check of evals/questions.yaml (no corpus needed)."""
+    items = yaml.safe_load(run_evals.DEFAULT_QUESTIONS.read_text(encoding="utf-8"))
+    assert 10 <= len(items) <= 15
+    assert len({i["id"] for i in items}) == len(items)
+    for item in items:
+        case = run_evals.EvalCase(**item)
+        assert case.facts or case.expect, case.id
+        for pattern in case.expect:
+            re.compile(pattern)
+        for fact in case.facts:
+            assert fact["metric"] in fetch_edgar.METRICS, case.id
+            assert {"ticker", "fiscal_year", "metric"} <= set(fact)
+        for where in case.evidence:
+            doc, _, anchor = where.partition("#")
+            assert doc.endswith(".html") and anchor.startswith("item-"), where
+        # Every qualitative question says where its answer lives.
+        assert case.facts or case.evidence, case.id
+    assert sum(bool(i.get("facts")) for i in items) >= 5  # mostly quantitative, SQL-checkable
+    assert sum(bool(i.get("evidence")) for i in items) >= 3  # and some RAG questions
+
+
+REAL_CSV = PROJECT_ROOT / "data" / "datasets" / "financials.csv"
+REAL_DOCS = PROJECT_ROOT / "data" / "docs"
+
+
+@pytest.mark.skipif(not REAL_CSV.exists(), reason="SEC corpus not fetched (scripts/fetch_edgar.py)")
+def test_ground_truth_holds_on_the_fetched_corpus():
+    """Every answer in questions.yaml must be true of the pinned filings.
+
+    Quantitative facts must resolve from financials.csv, and each qualitative
+    pattern must occur in the Item named as its evidence. If a manifest
+    re-pin changes the filings, this points at the questions that went stale.
     """
-    summaries = gen.summarize(gen.generate_sales(42))
-    facts = []
-    for year, s in summaries.items():
-        facts += [gen.money(s.revenue), gen.pct(s.dtc_share), gen.pct(s.gross_margin)]
-        prev = summaries.get(year - 1)
-        if prev:
-            facts.append(gen.change(s.revenue, prev.revenue))
-        for group in ("by_region", "by_product"):
-            for key, value in getattr(s, group).items():
-                facts += [key, gen.money(value)]
-                if prev:
-                    facts.append(gen.change(value, getattr(prev, group)[key]))
-    facts.append(json.dumps(gen.NARRATIVE))  # the PDF-only facts (risks, reasons)
-    text = "\n".join(facts)
+    from analyst.rag.loader import load_filing
 
-    cases = run_evals.load_questions(run_evals.DEFAULT_QUESTIONS)
-    assert 5 <= len(cases) <= 8
-    stale = [(c.id, p) for c in cases for p in c.expect if not re.search(p, text, re.IGNORECASE)]
+    cases = run_evals.load_questions(
+        run_evals.DEFAULT_QUESTIONS, REAL_CSV
+    )  # raises if a fact is missing
+    stale = []
+    for case in (c for c in cases if c.evidence):
+        texts = []
+        for where in case.evidence:
+            doc, _, anchor = where.partition("#")
+            sections = load_filing(REAL_DOCS / doc, items=[anchor.removeprefix("item-")])
+            texts += [s.text for s in sections]
+        text = "\n".join(texts)
+        assert text, f"{case.id}: evidence {case.evidence} not found in data/docs"
+        stale += [(case.id, p) for p in case.expect if not _matches(p, text)]
     assert stale == []

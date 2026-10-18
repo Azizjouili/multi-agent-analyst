@@ -31,8 +31,9 @@ EMBEDDINGS_FILE = "embeddings.npy"
 RECORDS_FILE = "chunks.jsonl"
 MANIFEST_FILE = "manifest.json"
 # Bump when the record format changes. Version 2 added the `year` and `title`
-# fields that filtering and hybrid search depend on.
-INDEX_VERSION = 2
+# fields that filtering and hybrid search depend on. Version 3 replaced the PDF
+# `page` with a `section` (10-K Item or page), its `anchor`, and the `ticker`.
+INDEX_VERSION = 3
 
 
 class VectorIndexError(RuntimeError):

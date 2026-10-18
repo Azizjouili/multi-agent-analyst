@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Multi-agent research analyst: a supervisor, specialists, a critic and human approval." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Multi-Agent Analyst</title>
+    <script>
+      // Runs before the first paint: apply the saved (or system) theme now,
+      // so a dark-mode user never sees a white flash while React loads.
+      // Kept in sync with src/hooks/use-theme.ts (same key and values).
+      (function () {
+        var theme = null;
+        try { theme = localStorage.getItem("analyst.theme"); } catch (e) {}
+        var dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

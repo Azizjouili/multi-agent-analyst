@@ -21,6 +21,8 @@ x-app: &app
     # Empty is allowed so the indexer runs without a key; the API then
     # answers /health but runs fail with a clear "GOOGLE_API_KEY is not set".
     GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    # The indexer fetches the SEC corpus on first run; SEC wants your name and email.
+    SEC_USER_AGENT: ${SEC_USER_AGENT:-}
 
 services:
   api:

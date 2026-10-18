@@ -14,11 +14,11 @@ from analyst.state import make_source_id
 QUESTION = "Summarize the company's revenue trend and key risks, with sources"
 
 SQL = (
-    "SELECT year, ROUND(SUM(revenue_usd) / 1e6, 1) AS revenue_musd "
-    "FROM quarterly_sales GROUP BY year"
+    "SELECT fiscal_year, ROUND(value / 1e6, 1) AS revenue_musd "
+    "FROM financials WHERE ticker = 'KRO' AND metric = 'revenue'"
 )
 DATA_ID = make_source_id("data", SQL)
-RAG_ID = make_source_id("rag", "annual_report_2024.pdf#p4")
+RAG_ID = make_source_id("rag", "KRO_2024.html#item-1a/c0-1")
 WEB_ID = make_source_id("web", "https://news.example.com/outdoor-2023")
 
 SOURCES = {
@@ -32,8 +32,8 @@ SOURCES = {
     RAG_ID: {
         "id": RAG_ID,
         "kind": "rag",
-        "title": "Kestrel Ridge Outdoor Co. Annual Report 2024, p. 4",
-        "locator": "annual_report_2024.pdf#p4",
+        "title": "Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A. Risk Factors",
+        "locator": "KRO_2024.html#item-1a/c0-1",
         "snippet": "Tariffs and trade policy. A 10% tariff...",
     },
     WEB_ID: {
@@ -112,7 +112,9 @@ def test_prompt_shows_findings_and_sources_with_short_labels():
     prompt = _prompt(llm)
     assert QUESTION in prompt
     assert "[F1] (data, sub-task t1) Revenue fell to $393.1 million in 2023 [S1]." in prompt
-    assert "[S2] (rag) Kestrel Ridge Outdoor Co. Annual Report 2024, p. 4" in prompt
+    assert (
+        "[S2] (rag) Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A. Risk Factors" in prompt
+    )
     assert DATA_ID not in prompt  # the model never sees raw hash ids
     assert "Your previous draft" not in prompt
 
@@ -278,8 +280,8 @@ def test_finalize_bibliography_has_label_type_and_description():
     assert bibliography == [
         "1. **Outdoor gear sales dropped in 2023** (web: web page) - <https://news.example.com/outdoor-2023>",
         f"2. **Net revenue by year** (data: SQL query) - `{SQL}`",
-        "3. **Kestrel Ridge Outdoor Co. Annual Report 2024, p. 4** (rag: internal document) - "
-        "annual_report_2024.pdf, page 4",
+        "3. **Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A. Risk Factors** "
+        "(rag: document) - KRO_2024.html, Item 1A, chunks 0-1",
     ]
 
 
@@ -294,11 +296,11 @@ def test_finalize_drops_invented_ids_and_lists_only_cited_sources():
         "Revenue fell [1]. Made up. See [the OIA report](https://x.org) [sic]."
     )
     assert cited == [DATA_ID]
-    assert "deadbeef" not in report and WEB_ID not in report and "Annual Report" not in report
+    assert "deadbeef" not in report and WEB_ID not in report and "Item 1A" not in report
 
 
 def test_finalize_truncates_long_sql_to_one_line():
-    long_sql = "SELECT " + ", ".join(f"col_{i}" for i in range(60)) + "\nFROM quarterly_sales"
+    long_sql = "SELECT " + ", ".join(f"col_{i}" for i in range(60)) + "\nFROM financials"
     sid = make_source_id("data", long_sql)
     src = {
         sid: {"id": sid, "kind": "data", "title": "SQL: Wide", "locator": long_sql, "snippet": ""}

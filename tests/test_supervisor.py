@@ -52,8 +52,15 @@ def test_first_round_decomposes_the_question_into_assigned_subtasks(settings):
     # The prompt grounds the planner in what each specialist can actually reach.
     prompt = _text(llm.history[0])
     assert QUESTION in prompt
-    assert "annual_report_2024.pdf" in prompt
-    assert "quarterly_sales (288 rows: period, year" in prompt
+    assert "KRO_2024.html" in prompt
+    # The table catalog is read live from the database, with the values a
+    # planner needs (companies, metrics, years): no supervisor change needed
+    # when the data changes.
+    assert (
+        "financials (23 rows: ticker [BFA|KRO], company [Bluefin Analytics Inc.|"
+        "Kestrel Ridge Outdoor Co.], cik, fiscal_year 2022-2024, period_end" in prompt
+    )
+    assert "metric [eps_diluted|gross_profit|net_income|rd_expense|revenue|total_assets]" in prompt
 
 
 def test_duplicates_are_dropped_and_plan_size_is_capped(settings):
@@ -90,7 +97,7 @@ def test_planning_failure_falls_back_to_one_task_per_available_specialist(settin
 def test_resource_catalog_reflects_what_exists(settings, tmp_path):
     r = describe_resources(settings)
     assert r.available == ["web", "rag", "data"]
-    assert r.docs == ["annual_report_2022.pdf", "annual_report_2023.pdf", "annual_report_2024.pdf"]
+    assert r.docs == ["BFA_2024.html", "KRO_2022.html", "KRO_2023.html", "KRO_2024.html"]
     empty = describe_resources(
         settings.model_copy(update={"index_dir": tmp_path, "db_path": tmp_path / "x.db"})
     )

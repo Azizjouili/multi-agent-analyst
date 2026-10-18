@@ -1,10 +1,10 @@
 # Multi-Agent Analyst
 
-A self-contained multi-agent research system built with **LangGraph**. A supervisor agent takes a complex research question, breaks it into sub-tasks, and hands them to specialist agents: web research, private-document RAG, and data analysis. A writer agent turns their findings into a cited report. A critic agent reviews the report and can send it back for revision. A human approves the report before it is final.
+A self-contained multi-agent research system built with **LangGraph**. A supervisor agent takes a complex research question, breaks it into sub-tasks, and hands them to specialist agents: web research, document RAG over real SEC 10-K filings, and SQL analysis of their XBRL financials. A writer agent turns their findings into a cited report. A critic agent reviews the report and can send it back for revision. A human approves the report before it is final.
 
 It runs on **Google Gemini's free tier** and uses **local embeddings**, so it costs nothing to run.
 
-> Status: ✅ all 15 roadmap steps built (see [Build roadmap](#build-roadmap)).
+> Status: ✅ all roadmap steps built (see [Build roadmap](#build-roadmap)).
 
 ## Quickstart
 
@@ -13,19 +13,51 @@ uv sync                          # create .venv and install deps
 cp .env.example .env             # then set GOOGLE_API_KEY (free: https://aistudio.google.com/apikey)
 uv run python -m analyst.llm     # live check of both model tiers: should print "pong" twice
 
-uv run python scripts/make_sample_data.py      # synthetic company PDFs + sales CSV
-uv run python -m analyst.rag.index             # chunk + embed the PDFs into data/index/
-uv run python -m analyst.data.load              # load the sales CSV into SQLite (data/analyst.db)
-uv run python -m analyst.rag.search "key risks in 2024"   # inspect retrieval (no LLM)
+uv run python scripts/fetch_edgar.py            # pinned 10-Ks + XBRL financials from SEC (~3 min)
+uv run python -m analyst.data.load              # financials.csv -> SQLite (data/analyst.db)
+uv run python -m analyst.rag.index             # segment, chunk + embed the 10-Ks (~10 min on CPU)
+uv run python -m analyst.rag.search "Apple supply chain risks" --year 2024   # inspect retrieval
 
-uv run pytest                    # offline tests (fake LLM, no API calls, no model download)
+uv run pytest                    # offline tests (fake LLM, synthetic fixture, no network)
 uv run pytest -m live            # opt-in tests that call Gemini
 uv run pytest -m model           # opt-in tests that load the real embedding model
 ```
 
-### Sample data
+## Data (SEC EDGAR)
 
-**Kestrel Ridge Outdoor Co.** is a fictional outdoor-gear maker, with 3 annual reports (2022–2024) and 288 rows of quarterly sales (quarter × region × product line × channel). Revenue dips in 2023 because of wholesale destocking ($412.6M → $393.1M) and reaches a record $466.7M in 2024. Every figure in the PDFs is computed from the CSV, so the two sources never disagree. Each source holds facts the other lacks (risks and the recall are only in the PDFs, quarterly detail only in the CSV), so a question like *"Summarize the company's revenue trend and key risks, with sources"* needs all three specialists.
+The corpus is real and public: **36 annual reports (Form 10-K) of 12 well-known US companies**, three fiscal years each, straight from SEC EDGAR. The documents feed the RAG agent; the financial statements' XBRL facts feed the SQL agent.
+
+| | |
+|---|---|
+| Companies | Apple, Microsoft, NVIDIA, Amazon, Alphabet, Meta, Tesla, Walmart, Coca-Cola, Johnson & Johnson, Procter & Gamble, Nike |
+| Filings | 36 10-Ks, fiscal years 2023–2026 (each company's three latest as of pinning) |
+| Indexed text | Items 1 (Business), 1A (Risk Factors), 3 (Legal Proceedings), 7 (MD&A), 7A (Market Risk): 180 sections, ~12,200 chunks |
+| SQL | `financials`: 384 rows, 12 metrics (revenue, gross profit, operating income, net income, R&D, diluted EPS, operating cash flow, capex, total assets, total liabilities, equity, cash) |
+
+**Fetched, not committed.** Only [`data/corpus/manifest.yaml`](data/corpus/manifest.yaml) is in git. It pins every filing by its **accession number**, the SEC's id for one immutable filing, so the corpus, the index and the eval answers are identical on every machine and never drift the way "the latest 10-K" would. `scripts/fetch_edgar.py` downloads exactly those filings (~115 MB of HTML plus ~45 MB of XBRL facts) into the git-ignored `data/docs/` and `data/datasets/`:
+
+- `data/docs/<TICKER>_<FY>.html`: the primary 10-K document as filed, plus a `.json` sidecar (company, fiscal year, accession, URL) that the loader reads;
+- `data/datasets/financials.csv`: one row per company, fiscal year and metric, taken from the XBRL *company facts* the SEC publishes. Each value is the one **the pinned filing itself reported** for its own fiscal year: not the prior-year comparatives a 10-K also contains, not a quarter, not a later restatement. The `concept` and `accession` columns say exactly where each number comes from.
+
+**`SEC_USER_AGENT` is required by SEC's fair-access policy:** every request must name you and a contact email, or SEC answers 403. Set it in your shell or in `.env` (`SEC_USER_AGENT=Jane Doe jane@example.com`); it defaults to the maintainer's. The script throttles itself to ~2 requests per second (SEC allows 10), stops with a clear message on 403/429 instead of retrying into a longer block, and is **resumable**: files already downloaded are skipped, and writes are atomic, so an interrupted run leaves nothing half-written. `--only AAPL MSFT` fetches some companies; `--pin <TICKER ...> --years 3` re-pins the latest 10-Ks of those tickers into the manifest (review the diff, then fetch).
+
+**Why only Items 1, 1A, 3, 7 and 7A are indexed.** They are the narrative: what the company does, its risks, its legal exposure and management's own explanation of the numbers. Item 8 (the financial statements) is mostly tables, which flatten into number soup that embeds poorly, and the SQL agent already has those figures exactly from XBRL. Leaving it out also halves the index (Item 8 alone would add ~4.4 M characters to the ~7 M indexed) and the embedding time. Add it with `EDGAR_ITEMS=1,1A,3,7,7A,8` and re-index.
+
+**How a 10-K becomes sections** (`rag/edgar.py`): the visible text is extracted with the standard library's HTML parser, dropping the hidden inline-XBRL block (`ix:header`, `display:none`) and re-gluing table cells (`$` | `391,035` → `$391,035`); page numbers and running headers are found by counting lines across printed page breaks, as for PDFs. Each Item heading appears at least twice, in the table of contents and at the Item itself, so the occurrence followed by the most text wins. Consecutive headings of the same Item (Microsoft prints "Item 1A" on every page) continue the Item instead of splitting it. Chevron was replaced by Procter & Gamble during pinning because Chevron puts its MD&A and financial statements in an appendix after Item 15, outside the Item structure.
+
+**Citation format.** A document source is a **passage**: one chunk, or adjacent chunks of the same Item joined back together (their overlap printed once). Its title names the company, fiscal year and Item, and its locator names the file, the Item and the chunk span:
+
+```
+title    Apple Inc. (AAPL) 10-K FY 2024, Item 1A. Risk Factors
+locator  AAPL_2024.html#item-1a/c3-4
+Sources  3. **Apple Inc. (AAPL) 10-K FY 2024, Item 1A. Risk Factors** (rag: document) - AAPL_2024.html, Item 1A, chunks 3-4
+```
+
+The source **id** is still the content hash of the locator (`rag:` + 8 hex chars), so citations stay stable across runs and revisions, and finalize's renumbering to `[1]…[n]` is unchanged. Only the human-readable descriptor changed. Why chunks rather than the whole Item, as with a PDF page: an Item runs to 100,000 characters, so "Item 1A" alone wouldn't tell a reader where to look.
+
+PDFs still work: drop your own into `data/docs/` and they're indexed page by page (`report.pdf#p4/c0`, "page 4").
+
+**Tests never touch the real corpus.** `tests/edgar_fixture.py` writes a tiny synthetic corpus in the same formats (two fictional companies, four 10-Ks with a table of contents, hidden XBRL, footers and a running header, XBRL facts with the traps above), so the offline suite exercises the real loader and extraction code in seconds. The old synthetic generator (`scripts/make_sample_data.py`) is removed along with its reportlab dependency.
 
 **Free-tier quota:** Gemini's free tier limits requests *per model per day* (it was 20/day for `gemini-3.8-flash` on this project's key). A full multi-agent run makes roughly 10–15 LLM calls, so check your limits at https://ai.dev/rate-limit.
 
@@ -35,17 +67,43 @@ Gemini model names change often. If the default `GEMINI_MODEL` returns a 404, li
 uv run python -c "from google import genai; [print(m.name) for m in genai.Client().models.list() if 'flash' in m.name]"
 ```
 
-## Web UI
+## Web UI (React)
 
-A browser page over the same API, so you don't need curl:
+A chat-style app in `frontend/` (Vite, React, TypeScript, Tailwind CSS, shadcn/ui). It's served by the same FastAPI app at http://localhost:8000 and talks to the same endpoints as curl.
+
+- **Ask** a question (or pick an example), with Ctrl/⌘+Enter to send. Several questions stack up as a thread.
+- **Live agent timeline:** Supervisor → Documents / SQL / Web research (in parallel) → Writer → Critic → Human review → Finalize. Each step shows running, done or pending, with timings.
+- **Human review:** when the critic accepts a draft, you see it exactly as it will be published. **Approve** it, or **Send feedback** to the writer.
+- **Report:** rendered Markdown with citation badges (hover one for its source) and a `## Sources` list. Copy or download it as `.md`.
+- Dark/light toggle (remembered). The run id stays in the URL (`#run=<id>`), so a reload or a shared link reconnects to the run.
+
+### Production / Docker: no Node needed
 
 ```bash
-uv run python scripts/serve.py   # or: docker compose up -d (same port)
+docker compose up -d --build     # the image builds the UI in a Node stage
+# open http://localhost:8000
 ```
 
-Open http://localhost:8000, type a question and press **Ask** (or Ctrl+Enter). The status pill follows the run (`running` → `awaiting review` → `done`). When the critic accepts a draft, the page shows it with numbered citations and a Sources list. **Approve** finalizes it. **Send feedback** sends it back to the writer, and the draft returns for review once it's revised. The final report is rendered as Markdown, including its `## Sources` section.
+Without Docker, build the UI once, then start the API. FastAPI serves `frontend/dist` directly:
 
-The run id is kept in the URL (`#run=<id>`), so reloading the page reconnects to the run. Runs live in the checkpoint database, not the browser. The page is a single file (`src/analyst/static/index.html`) with no build step. It loads `marked` and `DOMPurify` from a CDN; without them it shows the report as plain text.
+```bash
+cd frontend && npm ci && npm run build && cd ..
+uv run python scripts/serve.py   # open http://localhost:8000
+```
+
+### Local frontend development (needs Node 20.19+ or 22+)
+
+```bash
+uv run python scripts/serve.py   # terminal 1: the API on :8000
+cd frontend && npm install && npm run dev   # terminal 2: open http://localhost:5173
+```
+
+The Vite dev server hot-reloads the UI and proxies `/runs` and `/health` to the API on :8000, so the app uses the same relative URLs as in production and the API needs no CORS. If the API runs on another port, set `API_URL=http://localhost:8010 npm run dev`. Node is only needed for this; the Docker image builds the UI itself.
+
+How it fits together:
+- **Stage progress** comes from an additive `stages` field on `GET /runs/{id}`: `[{node, status, step, started_at, finished_at}]`. A LangChain callback that the API adds to the run config records each graph node as it starts and finishes, so graph and node code are unchanged. It's kept in memory by the process running the graph, so after an API restart a run's timeline starts empty, while its status and report still come from the checkpoint.
+- **Serving:** `/assets/*` (hashed bundles, cached forever) is a `StaticFiles` mount. `GET /` and any other non-API path return `index.html` (the SPA fallback). It's registered after the API routes, so it never shadows `/runs`, `/health`, `/docs` or `/openapi.json`. Unknown API-looking paths and missing files still get a real 404.
+- **Safety:** the report is LLM output built from fetched web pages, so it's untrusted. `react-markdown` renders it without raw HTML (no `innerHTML`) and strips `javascript:` links.
 
 ## Running with Docker
 
@@ -53,9 +111,10 @@ The image is multi-stage. A builder installs the locked dependencies with uv, us
 
 ```bash
 # 1. Your key: in your shell (export GOOGLE_API_KEY=...) or in .env. Compose reads both.
-cp .env.example .env              # then set GOOGLE_API_KEY
+cp .env.example .env              # then set GOOGLE_API_KEY (and SEC_USER_AGENT)
 
-# 2. Build the image and prepare data/ (sample data if data/docs is empty -> SQLite -> index).
+# 2. Build the image and prepare data/: fetch the SEC corpus if data/docs is empty
+#    (needs network), then SQLite, then the vector index (~10 min on CPU).
 docker compose build
 docker compose run --rm indexer   # one-off; the "tools" profile keeps it out of `up`
 
@@ -136,14 +195,14 @@ Hard budgets (`MAX_REVISIONS`, `MAX_RESEARCH_ROUNDS`) guarantee the loops end. T
 
 | Agent | Role | Tools | Output into state |
 |---|---|---|---|
-| **Supervisor / Planner** | Breaks the question into 2–6 self-contained sub-tasks and assigns each to `web`, `rag`, or `data` (structured output). Its prompt includes a **resource catalog** built from what actually exists (indexed PDFs, database tables and columns), and specialists whose data is missing are marked unavailable. Code validates the plan (drops unavailable specialists and duplicates, caps the size). On a **research round** it receives the critic's gaps plus the findings so far and plans only 1–3 gap sub-tasks; earlier findings are kept by the append reducer. | None (LLM with structured output) | `plan`, `research_rounds` |
+| **Supervisor / Planner** | Breaks the question into 2–6 self-contained sub-tasks and assigns each to `web`, `rag`, or `data` (structured output). Its prompt includes a **resource catalog** built live from what actually exists (indexed filings; database tables with their columns, the values of low-cardinality columns such as tickers and metrics, and year ranges), and specialists whose data is missing are marked unavailable. Code validates the plan (drops unavailable specialists and duplicates, caps the size). On a **research round** it receives the critic's gaps plus the findings so far and plans only 1–3 gap sub-tasks; earlier findings are kept by the append reducer. | None (LLM with structured output) | `plan`, `research_rounds` |
 | **Web Research** | Answers one sub-task from the live web. The LLM writes 1–2 search queries; DuckDuckGo results are deduplicated; the LLM picks the pages worth reading; pages are fetched **in parallel through a guarded fetcher**. Failed pages are **backfilled** from the remaining results, skipping hosts that already refused us. The answer uses only the **most relevant passages** of each page (chunker + BM25 reused from RAG) and cites URLs. | `web_search` (DuckDuckGo via `ddgs`, no key), `web_fetch` (httpx + stdlib HTML-to-text) | `findings`, `sources` (URLs) |
-| **Document RAG** | Answers one sub-task from the private PDFs in `data/docs/`. The LLM rewrites the sub-task into 1–3 search queries and, if the sub-task names a year, a **year filter**. **Hybrid search** (BM25 + vectors, fused with RRF) over **our own vector store** retrieves chunks, and the LLM answers only from them, citing pages. | `Retriever.retrieve(queries, k, filters)` | `findings`, `sources` (file + page) |
-| **Data Analysis** | Answers quantitative sub-tasks over the local sales dataset. It reads a **profiled schema** (exact category values, numeric ranges), writes 1–3 **read-only SQL** queries that do all the arithmetic (growth, shares, $M), runs them through the guarded SQL tool, **repairs failed queries** using the error message (max 2 attempts), and interprets only the result tables. | `run_sql` (4 layers: SELECT-only validation, read-only connection, SQLite authorizer, row cap + timeout) | `findings`, `sources` (the SQL query + its result) |
+| **Document RAG** | Answers one sub-task from the 10-K filings in `data/docs/` (and any PDFs you add). The LLM rewrites the sub-task into 1–3 search queries and, if the sub-task names a fiscal year, a **year filter**. **Hybrid search** (BM25 + vectors, fused with RRF) over **our own vector store** retrieves chunks; adjacent chunks of one Item are joined into a passage, and the LLM answers only from those passages, citing them. | `Retriever.retrieve(queries, k, filters)` | `findings`, `sources` (company, FY, Item + chunk span) |
+| **Data Analysis** | Answers quantitative sub-tasks over the XBRL `financials` table (one row per company, fiscal year and metric). It reads a **profiled schema** (exact category values, numeric ranges, each metric's unit, and each company's fiscal years and unreported metrics), writes 1–3 **read-only SQL** queries that do all the arithmetic (growth, shares, $B), runs them through the guarded SQL tool, **repairs failed queries** using the error message (max 2 attempts), and interprets only the result tables. | `run_sql` (4 layers: SELECT-only validation, read-only connection, SQLite authorizer, row cap + timeout) | `findings`, `sources` (the SQL query + its result) |
 | **Writer** | Synthesizes all findings into a structured Markdown report (title, Summary, theme sections, Limitations) on the **strong** tier. It sees sources as short labels `[S1]…`, which are resolved back to stable source ids before the draft is stored, so invented labels are dropped and the draft only cites ids in `sources`. On a **revision** it gets the previous draft plus numbered feedback points: human feedback first (marked as highest priority), then the critic's, plus any findings from a research round. If the model fails, it falls back to a cited findings-only report, or keeps the previous draft. | None | `draft`, `revision_count` |
 | **Critic** | **1. Deterministic gate:** every factual sentence must cite a source, and every cited id must exist in `sources` (headings, intro lines ending in ':', and the Limitations section are exempt). If it fails, the verdict is `revise` with the offending sentences quoted, and **no LLM call** is made. **2. LLM judge** (strong tier, with the fast fallback): scores groundedness, coverage and clarity (1–5), then gives a verdict (accept / revise / research), a feedback list, and missing topics. Code keeps the verdict consistent (research without topics becomes revise; accept with a score below 3 becomes revise). **3. Budgets:** with no revisions left, revise becomes accept; with no research rounds left, research becomes a revise that states the gaps under Limitations; with both spent, the judge isn't called. Open feedback is kept for the human. | Deterministic citation checker | `critiques` |
 | **Human Gate** | Pauses the run with `interrupt()` and hands the caller the draft, a reader-facing preview (numbered citations + Sources), and the latest critique. Resumed with `"approve"` or rejection text (or `{"approved", "feedback"}`); rejection feedback goes first in the writer's next prompt. `HUMAN_REVIEW=false` auto-approves (batch runs, evals). | `interrupt()` + SQLite checkpointer | `human_feedback`, `approved` |
-| **Finalize** | **Deterministic, no LLM.** Renumbers citations to `[1]…[n]` in order of first appearance (numbers sorted within a group), drops any id not in `sources` (the last defense against invented citations), and appends a **Sources** section: label, type (rag/data/web), and a one-line description (page reference, URL, or the SQL itself). | None | `final_report` |
+| **Finalize** | **Deterministic, no LLM.** Renumbers citations to `[1]…[n]` in order of first appearance (numbers sorted within a group), drops any id not in `sources` (the last defense against invented citations), and appends a **Sources** section: label, type (rag/data/web), and a one-line description (file + Item + chunks, URL, or the SQL itself). | None | `final_report` |
 
 **Design choice: why the data agent writes SQL instead of executing Python.** Running arbitrary LLM-generated Python needs a real sandbox. Read-only SQL against a local SQLite file is enough for "run numbers over a dataset", it is easy to restrict (SELECT only, read-only connection, row cap), and it is easy to trace. A sandboxed Python tool could be added later as an extension.
 
@@ -161,10 +220,10 @@ class Subtask(TypedDict):
 
 
 class Source(TypedDict):
-    id: str  # stable content hash, e.g. "web:3f9a1c" / "doc:annual_report.pdf#p4" / "data:8b2e"
-    kind: Literal["web", "doc", "data"]
+    id: str  # stable content hash of the locator, e.g. "web:3f9a1c2b" / "rag:9e1d04aa" / "data:8b2e77f0"
+    kind: Literal["web", "rag", "data"]
     title: str
-    locator: str  # URL, file+page, or the SQL query
+    locator: str  # URL, "AAPL_2024.html#item-1a/c3-4" (a filing passage), or the SQL query
     snippet: str  # the evidence text the claim rests on
 
 
@@ -242,17 +301,22 @@ writer ──► critic ──► verdict?
 | **LLM** | `LLM_PROVIDER=gemini` through `langchain-google-genai`, behind a small `llm.py` factory (plus a scripted `fake` provider for offline tests). **Per-step model routing:** call sites ask for a tier, not a model. `fast` (`GEMINI_FAST_MODEL`, default `gemini-3.5-flash-lite`) handles light steps: search-query planning and page selection. `strong` (`GEMINI_MODEL`, default `gemini-3.8-flash`) handles supervisor planning, SQL, grounded answers, writing and critique. Free-tier quotas are **per model per day**, so two models roughly double the daily budget. Each model has its own client-side rate limiter, shared by all its instances. **Strong → fast fallback:** a quota (429) or overload (503) error on the strong model retries the same call, including structured-output calls, on the fast model (`LLM_FALLBACK_TO_FAST`). |
 | **Embeddings** | `sentence-transformers` (`all-MiniLM-L6-v2`, 384-dim), run locally on CPU at no cost. |
 | **Vector store** | **Written from scratch**: NumPy matrix of L2-normalized embeddings, cosine similarity via a dot product, top-k with `argpartition`, persisted as `.npy` + `.jsonl` metadata. No vector DB dependency. Doing it by hand shows you understand what a vector DB does. |
-| **Hybrid search** | **BM25 written from scratch** (inverted index, idf, length normalization, plural stemming) next to cosine search, fused with **Reciprocal Rank Fusion** (k=60). Vectors find meaning (\"sales increased\" ≈ \"revenue grew\"); BM25 finds exact tokens like years and figures, which small embedders blur. An exact **metadata filter** (`{\"year\": 2024}`) is applied before ranking. |
+| **Hybrid search** | **BM25 written from scratch** (inverted index, idf, length normalization, plural stemming) next to cosine search, fused with **Reciprocal Rank Fusion** (k=60). Vectors find meaning (\"sales increased\" ≈ \"revenue grew\"); BM25 finds exact tokens like years and figures, which small embedders blur. An exact **metadata filter** (`{\"year\": 2024}`, or `ticker`) is applied before ranking. |
 | **Web safety** | The fetcher **refuses non-public IPs (SSRF guard: cloud metadata, localhost, private ranges)**, follows redirects itself so every hop is re-checked, honours **robots.txt** (RFC 9309), accepts only HTML/text, and caps download bytes, extracted characters and time. Page text is treated as untrusted data in prompts. The test suite **blocks real network access**, so offline tests can't silently depend on the internet. |
-| **Chunking** | Our own recursive splitter: paragraphs, then lines, sentences, words, and characters, with a target size and overlap cut at sentence boundaries. The loader strips repeated headers and footers and rejoins wrapped lines. Chunks never cross a page, so every citation has an exact page. A **contextual header** (document title + page) is embedded with each chunk, so year-specific pages stay distinguishable. |
+| **Chunking** | Our own recursive splitter: paragraphs, then lines, sentences, words, and characters, with a target size and overlap cut at sentence boundaries. The loader segments each 10-K by Item (PDFs by page) and strips repeated headers and footers. Chunks never cross an Item or page, so every citation has an exact section. A **contextual header** (company, ticker, fiscal year, Item) is embedded and BM25-indexed with each chunk, so twelve companies' near-identical risk sections stay distinguishable. |
 | **Tracing** | **Langfuse Cloud** (free tier). `tracing.py` builds a LangChain `CallbackHandler` and `graph.run_config()` puts it in the run's `RunnableConfig`, the **only** injection point: LangChain hands a run's callbacks down to every node and every LLM call inside it, including the parallel `Send` branches, so no agent knows about tracing. One trace per run, **named after the question**, **tagged with the thread id**, with the thread id as the **session**, so a run paused at the human gate shows its before-pause and after-resume traces together. Nested spans per node and LLM call, with token usage. It is a no-op unless both `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set. |
 | **Evals** | `evals/` harness (see below). |
-| **API** | **FastAPI** (`src/analyst/api.py`, started by `scripts/serve.py`): `POST /runs` starts a run and returns its `thread_id` at once (202) · `GET /runs/{thread_id}` returns the status (`running` / `awaiting_review` / `done`, or `failed`), with the review payload (draft, preview, critique) when awaiting review and the report when done · `POST /runs/{thread_id}/review` resumes with `{"approved": bool, "feedback": str?}` (409 if the run isn't awaiting review) · `GET /health`. Runs execute in **background threads** (capped by `API_MAX_CONCURRENT_RUNS`), so requests answer immediately and the client polls. Status is read from the **SQLite checkpoint**, not memory: after an API restart a paused run is still awaiting review, and a run cut off mid-way continues from its last checkpoint when it is next polled. |
-| **Docker** | Multi-stage `Dockerfile`: a uv builder stage (locked deps, CPU-only torch, embedding model pre-downloaded) and a slim, non-root runtime with `HF_HUB_OFFLINE=1`. No `.env` in the image (`.dockerignore`). `docker-compose.yml` has an `api` service (port 8000 on localhost, `data/` bind-mounted, `GOOGLE_API_KEY` from the host) and a one-off `indexer` service (profile `tools`). See [Running with Docker](#running-with-docker). |
+| **API** | **FastAPI** (`src/analyst/api.py`, started by `scripts/serve.py`): `POST /runs` starts a run and returns its `thread_id` at once (202) · `GET /runs/{thread_id}` returns the status (`running` / `awaiting_review` / `done`, or `failed`), with the review payload (draft, preview, critique) when awaiting review and the report when done, plus `stages` (each graph node's live status and timings, recorded by a callback) · `POST /runs/{thread_id}/review` resumes with `{"approved": bool, "feedback": str?}` (409 if the run isn't awaiting review) · `GET /health`. Runs execute in **background threads** (capped by `API_MAX_CONCURRENT_RUNS`), so requests answer immediately and the client polls. Status is read from the **SQLite checkpoint**, not memory: after an API restart a paused run is still awaiting review, and a run cut off mid-way continues from its last checkpoint when it is next polled. |
+| **Docker** | Multi-stage `Dockerfile`: a Node stage that builds the React UI (`npm ci && npm run build`), a uv builder stage (locked deps, CPU-only torch, embedding model pre-downloaded) and a slim, non-root runtime with `HF_HUB_OFFLINE=1`. No `.env` in the image (`.dockerignore`). `docker-compose.yml` has an `api` service (port 8000 on localhost, `data/` bind-mounted, `GOOGLE_API_KEY` from the host) and a one-off `indexer` service (profile `tools`) that fetches the SEC corpus if `data/docs` is empty (with `SEC_USER_AGENT`), then loads SQLite and builds the index. See [Running with Docker](#running-with-docker). |
 
 ### Eval harness
 
-`evals/questions.yaml` holds 8 factual questions about Kestrel Ridge (yearly revenue, growth, the 2023 decline and its causes, product lines, 2024 risks, supplier concentration, DTC share, Asia-Pacific growth). Each has regex ground truths taken from the deterministic sample-data generator, and a test fails if the generator and the questions drift apart. `uv run python evals/run_evals.py` runs every question through the full pipeline (human review off) and scores the result:
+`evals/questions.yaml` holds 12 questions about the pinned corpus: 8 **quantitative** (Apple's FY2024 net sales, NVIDIA's FY2025 revenue and growth, Microsoft's net income, Tesla's net-income drop, Walmart's revenue, Meta's R&D share of revenue, Apple's EPS, Amazon's operating cash flow) and 4 **qualitative** (Apple's supply-chain risks, NVIDIA's export controls, Nike's wholesale decline in MD&A, Coca-Cola's consumer-health risks).
+
+- A quantitative question names its **facts**, not a number: `{ticker: NVDA, fiscal_year: 2025, metric: revenue, compare_to: 2024}`. At load time `evals/ground_truth.py` looks the value up in `financials.csv` (the XBRL value the pinned 10-K reported) and builds a **tolerant regex** that accepts every correct rounding and unit ("$130.5 billion", "$130,497 million", "114.2%") and nothing else. A typed-in number could be mistyped or go stale; this one is computed from the same pinned table the SQL agent queries. The results file records each derived answer (`ground_truth`).
+- A qualitative question has hand-written regexes plus an **`evidence`** pointer (`AAPL_2024.html#item-1a`), and a test checks that every pattern really occurs in that Item of the fetched filing (it skips when the corpus isn't fetched). If a re-pin changes the filings, that test names the stale questions.
+
+`uv run python evals/run_evals.py` runs every question through the full pipeline (human review off) and scores the result:
 
 | Metric | How it is computed |
 |---|---|
@@ -271,14 +335,19 @@ writer ──► critic ──► verdict?
 multi-agent-analyst/
 ├── README.md
 ├── pyproject.toml              # deps + tooling (ruff, pytest)
-├── .env.example                # GOOGLE_API_KEY, LLM_PROVIDER, GEMINI_MODEL, LANGFUSE_*, budgets
-├── Dockerfile                  # multi-stage: uv builder -> slim non-root runtime
+├── .env.example                # GOOGLE_API_KEY, SEC_USER_AGENT, EDGAR_ITEMS, LANGFUSE_*, budgets
+├── Dockerfile                  # multi-stage: Node UI build + uv builder -> slim non-root runtime
 ├── docker-compose.yml          # api service + one-off indexer (profile "tools")
-├── .dockerignore               # keeps .env, data/, .venv and tests out of the image
+├── .dockerignore               # keeps .env, data/, .venv, node_modules and tests out of the image
+├── frontend/                   # React UI: Vite + TypeScript + Tailwind + shadcn/ui (see "Web UI")
+│   ├── src/components/         # run card, agent timeline, review panel, Markdown + citations; ui/ = shadcn
+│   ├── src/hooks/use-run.ts    # polling, retry/backoff, review actions per run
+│   └── vite.config.ts          # @/ alias, build -> dist, dev proxy /runs + /health -> :8000
 │
 ├── data/
-│   ├── docs/                   # sample PDFs for the RAG agent
-│   ├── datasets/               # sample CSV(s) → loaded into analyst.db
+│   ├── corpus/manifest.yaml    # the pinned SEC corpus: CIKs + 10-K accession numbers (committed)
+│   ├── docs/                   # fetched 10-Ks <TICKER>_<FY>.html + .json sidecars (git-ignored)
+│   ├── datasets/               # financials.csv + cached XBRL company facts (git-ignored)
 │   └── index/                  # persisted vector store (generated, git-ignored)
 │
 ├── src/analyst/
@@ -306,10 +375,11 @@ multi-agent-analyst/
 │   │   ├── web_search.py       # DuckDuckGo wrapper (swappable search function)
 │   │   ├── web_fetch.py        # SSRF guard, robots.txt, redirects, size/time caps
 │   │   ├── html_text.py        # stdlib HTML → main text (drops nav/scripts, prefers <article>)
-│   │   └── sql.py              # validation + read-only conn + authorizer + row cap + timeout
+│   │   └── sql.py              # guarded SQL + schema profile/catalog (metrics, units, coverage)
 │   │
 │   ├── rag/
-│   │   ├── loader.py           # PDF → pages (pypdf)
+│   │   ├── edgar.py            # 10-K HTML → visible text → Items (TOC, XBRL, running headers)
+│   │   ├── loader.py           # filings → Item sections, PDFs → pages; sidecar metadata
 │   │   ├── chunker.py          # recursive splitter with overlap
 │   │   ├── embedder.py         # sentence-transformers wrapper
 │   │   ├── vector_store.py     # NumPy cosine-similarity store
@@ -319,21 +389,22 @@ multi-agent-analyst/
 │   │   └── search.py           # CLI: inspect retrieval results for a query
 │   │
 │   ├── tracing.py              # Langfuse callback via the run config (no-op if unconfigured)
-│   ├── api.py                  # FastAPI app: start / poll / review runs (background threads)
-│   └── static/index.html       # web UI served at GET / (vanilla JS, no build step)
+│   ├── api.py                  # FastAPI app: start / poll / review runs, live stages, serves the SPA
+│   └── static/                 # built UI (Docker copies frontend/dist here; not in git)
 │
 ├── evals/
-│   ├── questions.yaml          # questions + regex ground truths (from the generator)
+│   ├── questions.yaml          # XBRL facts (quantitative) + regexes with evidence (qualitative)
+│   ├── ground_truth.py         # facts → tolerant regexes from financials.csv
 │   ├── run_evals.py            # run the pipeline, score deterministically, write JSON
 │   └── results/                # timestamped results (git-ignored)
 │
 ├── scripts/
-│   ├── make_sample_data.py     # generates the sample CSV/PDFs so the repo is reproducible
+│   ├── fetch_edgar.py          # pinned 10-Ks + XBRL → data/ (User-Agent, throttle, resumable)
 │   ├── review.py               # CLI: run a question, approve/reject at the human gate, --resume
 │   ├── serve.py                # starts the API with uvicorn
-│   └── build_index.sh          # indexer: sample data if missing -> SQLite -> vector index
+│   └── build_index.sh          # indexer: fetch SEC corpus if missing -> SQLite -> vector index
 │
-└── tests/                      # unit tests (fake LLM) + graph routing tests
+└── tests/                      # offline tests (fake LLM); edgar_fixture.py = tiny synthetic 10-K corpus
 ```
 
 ---
@@ -358,3 +429,5 @@ Each step is small, runnable, and explained before moving on.
 14. ✅ Eval harness (8 ground-truth questions, deterministic scoring: answer hit, citation coverage, no invented citations)
 15. ✅ Docker + docker-compose (multi-stage uv build, CPU torch, offline model, non-root; api + indexer services)
 16. ✅ Web UI at `/` (one static page over the same API: ask, live status, approve or send feedback, rendered report)
+17. ✅ React frontend (Vite + TS + Tailwind + shadcn/ui): chat thread, live agent timeline from the additive `stages` field, review gate, citation badges, dark mode; built in a Node Docker stage
+18. ✅ Real corpus from SEC EDGAR: pinned manifest (12 companies × 3 10-Ks), resumable fetcher, Item-segmented 10-K loader, company/FY/Item/chunk citations, XBRL `financials` table, evals with ground truth derived from XBRL

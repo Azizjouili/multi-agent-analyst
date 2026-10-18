@@ -1,73 +1,117 @@
-# Eval questions about Kestrel Ridge Outdoor Co., the fictional company in data/.
+# Eval questions about the pinned SEC EDGAR corpus (data/corpus/manifest.yaml).
 #
-# Every expected answer comes from scripts/make_sample_data.py (seed 42): the
-# CSV figures are computed from fixed inputs, and the PDFs are generated from
-# the same numbers, so the ground truth is exact and stable across runs.
-# tests/test_evals.py checks that each pattern still matches the generated data.
+# Two kinds of ground truth, both deterministic:
 #
-# `expect`: regular expressions (case-insensitive). answer_hit is true only if
-# EVERY pattern appears in the final report. Why regexes rather than exact
-# strings: the writer may say "$466.7 million", "466.7M" or "18.7 percent";
-# the facts are what matter, not the wording.
+# - `facts` (quantitative): named XBRL values, not typed-in numbers. At load
+#   time evals/ground_truth.py looks each one up in data/datasets/financials.csv
+#   (extracted by scripts/fetch_edgar.py from the pinned 10-K) and turns it into
+#   a tolerant regex: "$391.04 billion", "$391.0B" and "$391,035 million" all
+#   match the true value; any other figure doesn't.
+#     {ticker, fiscal_year, metric}               the value itself
+#     {..., compare_to: <fiscal year>}            growth vs that year, in percent
+#     {..., per: <metric>}                        metric / per-metric, in percent
+# - `expect` (qualitative): regexes (case-insensitive) for what the filing says.
+#   `evidence` names where: tests/test_evals.py checks that every pattern really
+#   occurs in that Item of the fetched filing.
+#
+# answer_hit is true only if EVERY pattern appears in the final report's body.
 # `source`: where the answer lives, so a failure is easy to diagnose (did the
 # data agent, the RAG agent, or the writer drop it?).
+#
+# Fiscal years are the companies' own labels: Microsoft's FY2026 ended June
+# 2026, NVIDIA's FY2025 and Walmart's FY2025 ended in January 2025.
 
-- id: revenue_by_year
-  question: What was Kestrel Ridge Outdoor Co.'s net revenue in each year from 2022 to 2024?
-  expect:
-    - '412\.6'
-    - '393\.1'
-    - '466\.7'
-  source: CSV (SUM of revenue_usd by year); also each annual report
+# --- Quantitative (SQL over XBRL) ---------------------------------------------
+- id: aapl_revenue_fy2024
+  question: What were Apple's total net sales in fiscal year 2024?
+  facts:
+    - {ticker: AAPL, fiscal_year: 2024, metric: revenue}
+  source: financials (AAPL FY2024 revenue); AAPL_2024.html Item 7
 
-- id: growth_2024
-  question: By how much did Kestrel Ridge's net revenue grow in 2024 compared with 2023?
-  expect:
-    - '18\.7\s*(%|percent)'
-  source: CSV (computed growth); 2024 annual report, Financial Highlights
+- id: nvda_revenue_growth
+  question: >-
+    How much revenue did NVIDIA report for fiscal year 2025, and by what percentage did
+    it grow compared with fiscal year 2024?
+  facts:
+    - {ticker: NVDA, fiscal_year: 2025, metric: revenue}
+    - {ticker: NVDA, fiscal_year: 2025, metric: revenue, compare_to: 2024}
+  source: financials (NVDA revenue FY2024-FY2025)
 
-- id: decline_2023
-  question: How did Kestrel Ridge's net revenue change in 2023 versus 2022, and why?
+- id: msft_net_income
+  question: What was Microsoft's net income in fiscal years 2025 and 2026?
+  facts:
+    - {ticker: MSFT, fiscal_year: 2025, metric: net_income}
+    - {ticker: MSFT, fiscal_year: 2026, metric: net_income}
+  source: financials (MSFT net income)
+
+- id: tsla_net_income_change
+  question: How did Tesla's net income change from fiscal year 2023 to fiscal year 2024?
+  facts:
+    - {ticker: TSLA, fiscal_year: 2023, metric: net_income}
+    - {ticker: TSLA, fiscal_year: 2024, metric: net_income}
+  source: financials (TSLA net income); TSLA_2024.html Item 7 for the reasons
+
+- id: wmt_revenue_fy2025
+  question: What were Walmart's total revenues in fiscal year 2025?
+  facts:
+    - {ticker: WMT, fiscal_year: 2025, metric: revenue}
+  source: financials (WMT FY2025 revenue, the year ended January 31, 2025)
+
+- id: meta_rd_share_fy2024
+  question: >-
+    What share of Meta's fiscal year 2024 revenue did it spend on research and
+    development?
+  facts:
+    - {ticker: META, fiscal_year: 2024, metric: rd_expense, per: revenue}
+  source: financials (META FY2024 rd_expense / revenue)
+
+- id: aapl_eps_fy2025
+  question: What were Apple's diluted earnings per share in fiscal year 2025?
+  facts:
+    - {ticker: AAPL, fiscal_year: 2025, metric: eps_diluted}
+  source: financials (AAPL FY2025 eps_diluted)
+
+- id: amzn_operating_cash_flow_fy2024
+  question: How much cash did Amazon generate from operating activities in fiscal year 2024?
+  facts:
+    - {ticker: AMZN, fiscal_year: 2024, metric: operating_cash_flow}
+  source: financials (AMZN FY2024 operating_cash_flow)
+
+# --- Qualitative (RAG over 10-K Items) ----------------------------------------
+- id: aapl_supply_chain_risks_fy2024
+  question: >-
+    What supply-chain risks does Apple describe in the risk factors of its fiscal 2024
+    10-K?
   expect:
-    - '4\.7\s*(%|percent)'
+    - 'single[- ]source'
+    - 'outsourcing partners?'
+    - 'China'
+  evidence: [AAPL_2024.html#item-1a]
+  source: AAPL_2024.html Item 1A (single-source outsourcing partners, mostly in Asia)
+
+- id: nvda_export_controls_fy2025
+  question: How do export controls affect NVIDIA, according to its fiscal 2025 10-K?
+  expect:
+    - 'export control'
+    - 'China'
+  evidence: [NVDA_2025.html#item-1a]
+  source: NVDA_2025.html Item 1A
+
+- id: nke_wholesale_fy2025
+  question: How did Nike's wholesale revenues change in fiscal 2025, according to its MD&A?
+  expect:
     - 'wholesale'
-    - 'inventor'
-  source: CSV for the figure; 2023 annual report letter for the reasons (wholesale destocking)
+    - 'decreas|declin|fell|down|lower'
+    - '(?<![\d.])7\s*(%|percent)'
+  evidence: [NKE_2025.html#item-7]
+  source: NKE_2025.html Item 7 (NIKE Brand wholesale revenues decreased 7%)
 
-- id: product_lines
-  question: Which product lines does Kestrel Ridge sell, and which one grew fastest in 2024?
+- id: ko_consumer_health_risk_fy2024
+  question: >-
+    Which consumer health concerns does Coca-Cola list as risks to demand in its fiscal
+    2024 10-K?
   expect:
-    - 'tents'
-    - 'packs'
-    - 'apparel'
-    - 'footwear'
-    - '28\.6\s*(%|percent)|footwear[^.\n]*fastest|fastest[^.\n]*footwear'
-  source: CSV (product_line column); 2024 annual report, Product Line Review
-
-- id: risks_2024
-  question: What are the key risks highlighted in Kestrel Ridge's 2024 annual report?
-  expect:
-    - 'tariff'
-    - 'Tanh Loc|supplier concentration|single (contract )?manufacturer'
-    - 'recall'
-  source: 2024 annual report, Risk Factors (PDF only)
-
-- id: supplier_concentration
-  question: How did Kestrel Ridge's reliance on Tanh Loc Manufacturing change from 2022 to 2024?
-  expect:
-    - '42\s*(%|percent)'
-    - '31\s*(%|percent)'
-  source: 2022 and 2024 annual reports, Risk Factors (PDF only)
-
-- id: dtc_share_2024
-  question: What share of Kestrel Ridge's 2024 net revenue came from direct-to-consumer sales?
-  expect:
-    - '45\.9\s*(%|percent)'
-  source: CSV (channel column); 2024 annual report
-
-- id: apac_growth_2024
-  question: How much did Kestrel Ridge's Asia-Pacific revenue grow in 2024, and to what amount?
-  expect:
-    - '36\.7\s*(%|percent)'
-    - '76\.3'
-  source: CSV (region column); 2024 annual report, region table
+    - 'obesity'
+    - 'health'
+  evidence: [KO_2024.html#item-1a]
+  source: KO_2024.html Item 1A (risks related to consumer demand)

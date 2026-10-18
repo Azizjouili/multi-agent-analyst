@@ -7,11 +7,19 @@ __pycache__/
 *.egg-info/
 dist/
 
+# Frontend build output (built in Docker, or locally with `npm run build`)
+node_modules/
+src/analyst/static/
+
 # Secrets
 .env
 
-# Generated data (rebuilt by scripts/ and the ingest CLI)
+# Generated data (rebuilt by scripts/ and the ingest CLI). The SEC corpus is
+# fetched, not committed: data/corpus/manifest.yaml pins it, and
+# scripts/fetch_edgar.py downloads it (~150 MB) into data/docs and data/datasets.
+data/docs/
+data/datasets/
 data/index/
-data/*.db
-checkpoints.db
+*.db
+*.part
 evals/results/

@@ -1,17 +1,17 @@
-"""Tests for the from-scratch RAG pipeline and the sample-data generator."""
+"""Tests for the from-scratch RAG pipeline: 10-K/PDF loading, chunking, indexing, retrieval."""
 
-import csv
 import re
 
 import numpy as np
 import pytest
 
-from analyst.rag.chunker import chunk_pages, split_text
+from analyst.rag.chunker import chunk_sections, split_text
+from analyst.rag.edgar import html_to_pages, split_items
 from analyst.rag.index import build_index
-from analyst.rag.loader import Page, load_dir, load_pdf
+from analyst.rag.loader import Section, load_dir, load_filing, load_pdf
 from analyst.rag.retriever import Retriever
 from analyst.rag.vector_store import VectorIndexError, VectorStore
-from scripts import make_sample_data as gen
+from tests import edgar_fixture as fx
 from tests.fakes import BagOfWordsEmbedder
 
 # ---------------------------------------------------------------------------
@@ -78,14 +78,21 @@ def test_overlap_must_be_smaller_than_size():
         split_text(LONG_TEXT, size=100, overlap=100)
 
 
-def test_chunk_ids_pages_and_context_header():
-    pages = [Page("r.pdf", 1, "Alpha.", "Report 2024"), Page("r.pdf", 2, LONG_TEXT, "Report 2024")]
-    chunks = chunk_pages(pages, size=300, overlap=50)
-    assert chunks[0].id == "r.pdf#p1-c0"
-    assert {c.page for c in chunks} == {1, 2}
+def test_chunk_ids_sections_and_context_header():
+    title = "Apple Inc. (AAPL) 10-K FY 2024"
+    sections = [
+        Section("AAPL_2024.html", "item-1", "Item 1. Business", "Alpha.", title, 2024, "AAPL"),
+        Section("AAPL_2024.html", "item-1a", "Item 1A. Risk Factors", LONG_TEXT, title, 2024),
+    ]
+    chunks = chunk_sections(sections, size=300, overlap=50)
+    assert chunks[0].id == "AAPL_2024.html#item-1-c0"
+    assert chunks[1].id == "AAPL_2024.html#item-1a-c0"
+    assert {c.anchor for c in chunks} == {"item-1", "item-1a"}
     assert len({c.id for c in chunks}) == len(chunks)  # unique
-    assert chunks[0].embedding_text == "Report 2024, page 1\nAlpha."
-    assert "Report 2024" not in chunks[0].text  # the header is embedded, not stored
+    assert [c.index for c in chunks if c.anchor == "item-1a"][:3] == [0, 1, 2]
+    assert chunks[0].embedding_text == f"{title}, Item 1. Business\nAlpha."
+    assert title not in chunks[0].text  # the header is embedded, not stored
+    assert chunks[0].to_record()["ticker"] == "AAPL" and chunks[0].year == 2024
 
 
 # ---------------------------------------------------------------------------
@@ -141,56 +148,130 @@ def test_load_missing_index_explains_how_to_build(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Sample data + loader + full pipeline
+# 10-K HTML: text extraction and Item segmentation
 # ---------------------------------------------------------------------------
-def test_csv_shape(sample_data):
+def test_html_text_drops_hidden_xbrl_and_glues_table_cells():
+    html = (
+        '<html><body><div style="display:none"><ix:header>SECRET</ix:header></div>'
+        "<p>Visible&#160;text</p><table><tr><td>Net sales</td><td>$</td><td>391,035</td>"
+        "<td>(</td><td>1,234</td><td>)</td></tr></table>"
+        '<hr style="page-break-after:always"/><p>Page two</p></body></html>'
+    )
+    assert html_to_pages(html) == ["Visible text\nNet sales $391,035 (1,234)", "Page two"]
+
+
+def test_split_items_skips_table_of_contents_and_running_headers():
+    text = "\n".join(
+        [
+            "Item 1. Business 3",  # table of contents: no body before the next entry
+            "Item 1A. Risk Factors 5",
+            "Item 7. Management's Discussion and Analysis 9",
+            "Item 1. Business",
+            "We make tents.",
+            "Item 1A.",
+            "Risk Factors",  # the title on a line of its own is dropped
+            "Tariffs could hurt us.",
+            "PART I Item 1A",  # a running page header: the same Item continues
+            "Recalls could hurt us.",
+            "Item 7. Management's Discussion and Analysis",
+            "Revenue rose.",
+        ]
+    )
+    items = {s.item: s for s in split_items(text)}
+    assert list(items) == ["1", "1A", "7"]
+    assert items["1"].text == "We make tents."
+    assert items["1A"].text == "Tariffs could hurt us.\nRecalls could hurt us."
+    assert items["1A"].label == "Item 1A. Risk Factors"
+    assert items["7"].text == "Revenue rose."
+
+
+def test_load_filing_segments_items_and_reads_the_sidecar(sample_data):
     out, _ = sample_data
-    with (out / "datasets" / "quarterly_sales.csv").open(encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    assert len(rows) == 3 * 4 * 3 * 4 * 2  # years x quarters x regions x products x channels
-    assert {r["period"] for r in rows} >= {"2022-Q1", "2024-Q4"}
+    sections = load_filing(out / "docs" / "KRO_2024.html")
+    assert [s.anchor for s in sections] == ["item-1", "item-1a", "item-3", "item-7", "item-7a"]
+    risk = sections[1]
+    assert risk.title == "Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024"
+    assert (risk.year, risk.ticker, risk.label) == (2024, "KRO", "Item 1A. Risk Factors")
+    # Both printed pages of Item 1A, without the footer or the running header.
+    assert risk.text.startswith("Tariffs.") and risk.text.endswith("every year.")
+    assert "Form 10-K |" not in risk.text and "PART I" not in risk.text
+    every = " ".join(s.text for s in sections)
+    assert fx.HIDDEN_MARKER not in every  # hidden inline-XBRL text never leaks
+    assert fx.ITEM8_MARKER not in every  # Item 8 isn't indexed by default
+    assert "Net revenue $466.7 million" in sections[3].text  # the table row, re-glued
 
 
-def test_pdf_figures_match_the_csv(sample_data):
-    # The documents and the dataset must never contradict each other.
-    out, summaries = sample_data
-    for year, s in summaries.items():
-        text = " ".join(p.text for p in load_pdf(out / "docs" / f"annual_report_{year}.pdf"))
-        assert gen.money(s.revenue) in text
-        assert gen.pct(s.gross_margin) in text
-        for region in gen.REGIONS:
-            assert gen.money(s.by_region[region]) in text
-
-
-def test_loader_strips_footer_and_unwraps_lines(sample_data):
+def test_item_selection_is_configurable(sample_data):
     out, _ = sample_data
-    pages = load_pdf(out / "docs" / "annual_report_2024.pdf")
-    assert [p.page for p in pages] == [1, 2, 3, 4, 5]
-    assert all("- page" not in p.text for p in pages)  # footer removed
-    assert pages[0].title == "Kestrel Ridge Outdoor Co. Annual Report 2024"
-    # A sentence that the PDF wrapped across lines is back on one line.
-    assert "Growth came from direct-to-consumer" in pages[0].text
+    sections = load_filing(out / "docs" / "KRO_2024.html", items=["8"])
+    assert [s.label for s in sections] == ["Item 8. Financial Statements and Supplementary Data"]
+    assert fx.ITEM8_MARKER in sections[0].text
 
 
+def test_filing_without_sidecar_falls_back_to_the_file_name(tmp_path, sample_data):
+    out, _ = sample_data
+    copy = tmp_path / "ABC_2021.html"
+    copy.write_text((out / "docs" / "KRO_2024.html").read_text(encoding="utf-8"), encoding="utf-8")
+    section = load_filing(copy)[0]
+    assert (section.ticker, section.year, section.title) == ("ABC", 2021, "ABC (ABC) 10-K FY 2021")
+
+
+# ---------------------------------------------------------------------------
+# PDFs (your own documents) still load page by page
+# ---------------------------------------------------------------------------
+def test_pdf_loader_strips_footer_and_unwraps_lines(tmp_path):
+    path = tmp_path / "brochure.pdf"
+    fx.write_pdf(
+        path,
+        [
+            ["Growth came from direct-to-consumer", "sales and new stores.", "Acme - page 1"],
+            ["Risks include tariffs.", "Acme - page 2"],
+        ],
+        title="Acme Annual Report 2024",
+    )
+    pages = load_pdf(path)
+    assert [(p.anchor, p.label) for p in pages] == [("p1", "page 1"), ("p2", "page 2")]
+    assert pages[0].title == "Acme Annual Report 2024" and pages[0].year == 2024
+    assert all("Acme - page" not in p.text for p in pages)  # footer removed
+    # A sentence wrapped across lines is back on one line.
+    assert "Growth came from direct-to-consumer sales and new stores." in pages[0].text
+
+
+# ---------------------------------------------------------------------------
+# The full pipeline over the fixture corpus
+# ---------------------------------------------------------------------------
 def test_build_index_and_retrieve_end_to_end(sample_data, tmp_path):
-    out, _ = sample_data
+    out, filings = sample_data
     embedder = BagOfWordsEmbedder()
     stats = build_index(out / "docs", tmp_path, embedder, chunk_size=800, chunk_overlap=120)
-    assert stats["documents"] == 3
-    assert stats["chunks"] >= stats["pages"] == 15
+    assert stats["documents"] == len(filings) == 4
+    assert stats["companies"] == 2
+    assert stats["sections"] == 4 * 5  # Items 1, 1A, 3, 7, 7A of each filing
+    assert stats["chunks"] > stats["sections"]  # the long Item 1A spans several chunks
 
     store = VectorStore.load(tmp_path, expected_model=embedder.model_name)
-    assert set(store.manifest["files"]) == {f"annual_report_{y}.pdf" for y in gen.YEARS}
+    assert set(store.manifest["files"]) == {f"{f.stem}.html" for f in filings}
+    assert store.manifest["items"] == ["1", "1A", "3", "7", "7A"]
 
     hits = Retriever(store, embedder).retrieve("tariffs Southeast Asia Mexico factory", k=1)
-    assert hits[0].record["doc"] == "annual_report_2024.pdf"
-    assert hits[0].record["page"] == 4  # the Risk Factors page
+    rec = hits[0].record
+    assert (rec["doc"], rec["anchor"], rec["section"]) == (
+        "KRO_2024.html",
+        "item-1a",
+        "Item 1A. Risk Factors",
+    )
 
 
-def test_load_dir_is_sorted(sample_data):
+def test_load_dir_is_sorted_and_skips_sidecars(sample_data):
     out, _ = sample_data
-    docs = [p.doc for p in load_dir(out / "docs")]
+    docs = [s.doc for s in load_dir(out / "docs")]
     assert docs == sorted(docs)
+    assert all(d.endswith(".html") for d in docs)  # the .json sidecars are metadata, not docs
+
+
+def test_build_index_without_documents_explains_how_to_fetch(tmp_path):
+    with pytest.raises(SystemExit, match="fetch_edgar"):
+        build_index(tmp_path, tmp_path / "idx", BagOfWordsEmbedder(), 800, 120)
 
 
 # ---------------------------------------------------------------------------

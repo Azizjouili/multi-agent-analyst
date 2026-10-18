@@ -1,0 +1,240 @@
+# The SEC EDGAR corpus, pinned. scripts/fetch_edgar.py downloads exactly these filings.
+#
+# Each 10-K is identified by its accession number, which names one immutable
+# filing, so the corpus (and the eval ground truth derived from it) is the same
+# on every machine and never drifts. To move to newer filings, run
+#     uv run python scripts/fetch_edgar.py --pin <TICKER ...> --years 3
+# and review the diff of this file.
+#
+# fiscal_year is the company's own label (XBRL DocumentFiscalYearFocus): Walmart's
+# year ending January 2025 is "fiscal 2025". period_end is the last day of it.
+
+companies:
+- ticker: AAPL
+  name: Apple Inc.
+  cik: 320193
+  filings:
+  - fiscal_year: 2023
+    accession: 0000320193-23-000106
+    period_end: '2023-09-30'
+    filed: '2023-11-03'
+    primary_document: aapl-20230930.htm
+  - fiscal_year: 2024
+    accession: 0000320193-24-000123
+    period_end: '2024-09-28'
+    filed: '2024-11-01'
+    primary_document: aapl-20240928.htm
+  - fiscal_year: 2025
+    accession: 0000320193-25-000079
+    period_end: '2025-09-27'
+    filed: '2025-10-31'
+    primary_document: aapl-20250927.htm
+- ticker: AMZN
+  name: Amazon.com, Inc.
+  cik: 1018724
+  filings:
+  - fiscal_year: 2023
+    accession: 0001018724-24-000008
+    period_end: '2023-12-31'
+    filed: '2024-02-02'
+    primary_document: amzn-20231231.htm
+  - fiscal_year: 2024
+    accession: 0001018724-25-000004
+    period_end: '2024-12-31'
+    filed: '2025-02-07'
+    primary_document: amzn-20241231.htm
+  - fiscal_year: 2025
+    accession: 0001018724-26-000004
+    period_end: '2025-12-31'
+    filed: '2026-02-06'
+    primary_document: amzn-20251231.htm
+- ticker: GOOGL
+  name: Alphabet Inc.
+  cik: 1652044
+  filings:
+  - fiscal_year: 2023
+    accession: 0001652044-24-000022
+    period_end: '2023-12-31'
+    filed: '2024-01-31'
+    primary_document: goog-20231231.htm
+  - fiscal_year: 2024
+    accession: 0001652044-25-000014
+    period_end: '2024-12-31'
+    filed: '2025-02-05'
+    primary_document: goog-20241231.htm
+  - fiscal_year: 2025
+    accession: 0001652044-26-000018
+    period_end: '2025-12-31'
+    filed: '2026-02-05'
+    primary_document: goog-20251231.htm
+- ticker: JNJ
+  name: Johnson & Johnson
+  cik: 200406
+  filings:
+  - fiscal_year: 2023
+    accession: 0000200406-24-000013
+    period_end: '2023-12-31'
+    filed: '2024-02-16'
+    primary_document: jnj-20231231.htm
+  - fiscal_year: 2024
+    accession: 0000200406-25-000038
+    period_end: '2024-12-29'
+    filed: '2025-02-13'
+    primary_document: jnj-20241229.htm
+  - fiscal_year: 2025
+    accession: 0000200406-26-000016
+    period_end: '2025-12-28'
+    filed: '2026-02-11'
+    primary_document: jnj-20251228.htm
+- ticker: KO
+  name: The Coca-Cola Company
+  cik: 21344
+  filings:
+  - fiscal_year: 2023
+    accession: 0000021344-24-000009
+    period_end: '2023-12-31'
+    filed: '2024-02-20'
+    primary_document: ko-20231231.htm
+  - fiscal_year: 2024
+    accession: 0000021344-25-000011
+    period_end: '2024-12-31'
+    filed: '2025-02-20'
+    primary_document: ko-20241231.htm
+  - fiscal_year: 2025
+    accession: 0001628280-26-010047
+    period_end: '2025-12-31'
+    filed: '2026-02-20'
+    primary_document: ko-20251231.htm
+- ticker: META
+  name: Meta Platforms, Inc.
+  cik: 1326801
+  filings:
+  - fiscal_year: 2023
+    accession: 0001326801-24-000012
+    period_end: '2023-12-31'
+    filed: '2024-02-02'
+    primary_document: meta-20231231.htm
+  - fiscal_year: 2024
+    accession: 0001326801-25-000017
+    period_end: '2024-12-31'
+    filed: '2025-01-30'
+    primary_document: meta-20241231.htm
+  - fiscal_year: 2025
+    accession: 0001628280-26-003942
+    period_end: '2025-12-31'
+    filed: '2026-01-29'
+    primary_document: meta-20251231.htm
+- ticker: MSFT
+  name: Microsoft Corporation
+  cik: 789019
+  filings:
+  - fiscal_year: 2024
+    accession: 0000950170-24-087843
+    period_end: '2024-06-30'
+    filed: '2024-07-30'
+    primary_document: msft-20240630.htm
+  - fiscal_year: 2025
+    accession: 0000950170-25-100235
+    period_end: '2025-06-30'
+    filed: '2025-07-30'
+    primary_document: msft-20250630.htm
+  - fiscal_year: 2026
+    accession: 0001193125-26-323660
+    period_end: '2026-06-30'
+    filed: '2026-07-29'
+    primary_document: msft-20260630.htm
+- ticker: NKE
+  name: NIKE, Inc.
+  cik: 320187
+  filings:
+  - fiscal_year: 2024
+    accession: 0000320187-24-000044
+    period_end: '2024-05-31'
+    filed: '2024-07-25'
+    primary_document: nke-20240531.htm
+  - fiscal_year: 2025
+    accession: 0000320187-25-000047
+    period_end: '2025-05-31'
+    filed: '2025-07-17'
+    primary_document: nke-20250531.htm
+  - fiscal_year: 2026
+    accession: 0000320187-26-000088
+    period_end: '2026-05-31'
+    filed: '2026-07-15'
+    primary_document: nke-20260531.htm
+- ticker: NVDA
+  name: NVIDIA Corporation
+  cik: 1045810
+  filings:
+  - fiscal_year: 2024
+    accession: 0001045810-24-000029
+    period_end: '2024-01-28'
+    filed: '2024-02-21'
+    primary_document: nvda-20240128.htm
+  - fiscal_year: 2025
+    accession: 0001045810-25-000023
+    period_end: '2025-01-26'
+    filed: '2025-02-26'
+    primary_document: nvda-20250126.htm
+  - fiscal_year: 2026
+    accession: 0001045810-26-000021
+    period_end: '2026-01-25'
+    filed: '2026-02-25'
+    primary_document: nvda-20260125.htm
+- ticker: PG
+  name: The Procter & Gamble Company
+  cik: 80424
+  filings:
+  - fiscal_year: 2024
+    accession: 0000080424-24-000083
+    period_end: '2024-06-30'
+    filed: '2024-08-05'
+    primary_document: pg-20240630.htm
+  - fiscal_year: 2025
+    accession: 0000080424-25-000076
+    period_end: '2025-06-30'
+    filed: '2025-08-04'
+    primary_document: pg-20250630.htm
+  - fiscal_year: 2026
+    accession: 0000080424-26-000103
+    period_end: '2026-06-30'
+    filed: '2026-08-04'
+    primary_document: pg-20260630.htm
+- ticker: TSLA
+  name: Tesla, Inc.
+  cik: 1318605
+  filings:
+  - fiscal_year: 2023
+    accession: 0001628280-24-002390
+    period_end: '2023-12-31'
+    filed: '2024-01-29'
+    primary_document: tsla-20231231.htm
+  - fiscal_year: 2024
+    accession: 0001628280-25-003063
+    period_end: '2024-12-31'
+    filed: '2025-01-30'
+    primary_document: tsla-20241231.htm
+  - fiscal_year: 2025
+    accession: 0001628280-26-003952
+    period_end: '2025-12-31'
+    filed: '2026-01-29'
+    primary_document: tsla-20251231.htm
+- ticker: WMT
+  name: Walmart Inc.
+  cik: 104169
+  filings:
+  - fiscal_year: 2024
+    accession: 0000104169-24-000056
+    period_end: '2024-01-31'
+    filed: '2024-03-15'
+    primary_document: wmt-20240131.htm
+  - fiscal_year: 2025
+    accession: 0000104169-25-000021
+    period_end: '2025-01-31'
+    filed: '2025-03-14'
+    primary_document: wmt-20250131.htm
+  - fiscal_year: 2026
+    accession: 0000104169-26-000055
+    period_end: '2026-01-31'
+    filed: '2026-03-13'
+    primary_document: wmt-20260131.htm

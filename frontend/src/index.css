@@ -1,0 +1,225 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Class-based dark mode: the toggle (and the pre-paint script in index.html)
+   sets .dark on <html>, so the user's choice can override the OS setting. */
+@custom-variant dark (&:is(.dark *));
+
+/* shadcn/ui theme tokens (zinc base, indigo primary). Components only use
+   these names, so restyling the app is a matter of changing values here. */
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.21 0.02 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 264);
+  --popover: oklch(0.21 0.02 264);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.51 0.23 277);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.003 265);
+  --secondary-foreground: oklch(0.21 0.02 264);
+  --muted: oklch(0.967 0.003 265);
+  --muted-foreground: oklch(0.55 0.02 264);
+  --accent: oklch(0.962 0.018 272);
+  --accent-foreground: oklch(0.4 0.18 277);
+  --destructive: oklch(0.577 0.245 27.3);
+  --success: oklch(0.6 0.15 155);
+  --warning: oklch(0.6 0.15 58);
+  --border: oklch(0.92 0.005 264);
+  --input: oklch(0.92 0.005 264);
+  --ring: oklch(0.51 0.23 277);
+  --code-bg: oklch(0.97 0.004 264);
+}
+
+.dark {
+  --background: oklch(0.16 0.01 264);
+  --foreground: oklch(0.96 0.005 264);
+  --card: oklch(0.2 0.012 264);
+  --card-foreground: oklch(0.96 0.005 264);
+  --popover: oklch(0.96 0.005 264);
+  --popover-foreground: oklch(0.2 0.012 264);
+  --primary: oklch(0.68 0.17 277);
+  --primary-foreground: oklch(0.16 0.01 264);
+  --secondary: oklch(0.26 0.013 264);
+  --secondary-foreground: oklch(0.96 0.005 264);
+  --muted: oklch(0.26 0.013 264);
+  --muted-foreground: oklch(0.7 0.015 264);
+  --accent: oklch(0.28 0.05 277);
+  --accent-foreground: oklch(0.85 0.1 277);
+  --destructive: oklch(0.66 0.2 22);
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.8 0.14 75);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.68 0.17 277);
+  --code-bg: oklch(0.13 0.01 264);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-code-bg: var(--code-bg);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+/* ---- Rendered reports ------------------------------------------------------
+   Hand-written prose styles rather than the typography plugin: a report has a
+   small, known set of elements, and these follow the theme tokens directly. */
+.report {
+  @apply text-[0.95rem] leading-7 text-foreground;
+}
+.report > :first-child {
+  @apply mt-0;
+}
+.report h1 {
+  @apply mt-2 mb-4 text-2xl font-semibold tracking-tight;
+}
+.report h2 {
+  @apply mt-8 mb-3 border-b pb-2 text-lg font-semibold tracking-tight;
+}
+.report h3 {
+  @apply mt-6 mb-2 text-base font-semibold;
+}
+.report p {
+  @apply my-3;
+}
+.report ul {
+  @apply my-3 list-disc space-y-1.5 pl-6;
+}
+.report ol {
+  @apply my-3 list-decimal space-y-1.5 pl-6;
+}
+.report li::marker {
+  @apply text-muted-foreground;
+}
+.report a:not(.citation) {
+  @apply font-medium text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary;
+  overflow-wrap: anywhere;
+}
+.report strong {
+  @apply font-semibold;
+}
+.report blockquote {
+  @apply my-4 border-l-2 border-primary/40 pl-4 text-muted-foreground italic;
+}
+.report :not(pre) > code {
+  @apply rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.85em];
+}
+.report pre {
+  @apply my-4 overflow-x-auto rounded-lg border bg-code-bg p-4 font-mono text-[0.82rem] leading-6;
+}
+.report table {
+  @apply my-4 block w-full overflow-x-auto border-collapse text-sm;
+}
+.report th {
+  @apply border-b bg-muted/60 px-3 py-2 text-left font-semibold;
+}
+.report td {
+  @apply border-b px-3 py-2 align-top;
+}
+.report hr {
+  @apply my-6;
+}
+/* The Sources list: smaller, and the target of citation links. */
+.report ol.sources {
+  @apply space-y-2 text-sm text-muted-foreground;
+}
+.report ol.sources li {
+  @apply scroll-mt-24 rounded-md px-1 transition-colors;
+}
+.report ol.sources li:target {
+  @apply bg-accent text-accent-foreground;
+}
+.report ol.sources strong {
+  @apply text-foreground;
+}
+
+/* Syntax highlighting (rehype-highlight emits highlight.js classes). Colors
+   come from the theme, so code blocks follow light/dark with no second theme. */
+.hljs-comment,
+.hljs-quote {
+  @apply text-muted-foreground italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type {
+  color: oklch(0.55 0.2 300);
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-built_in,
+.dark .hljs-type {
+  color: oklch(0.75 0.15 300);
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-tag {
+  color: oklch(0.52 0.14 150);
+}
+.dark .hljs-string,
+.dark .hljs-attr,
+.dark .hljs-template-tag {
+  color: oklch(0.78 0.14 150);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol {
+  color: oklch(0.58 0.16 50);
+}
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-symbol {
+  color: oklch(0.8 0.13 60);
+}
+.hljs-title,
+.hljs-function,
+.hljs-section {
+  color: oklch(0.52 0.18 255);
+}
+.dark .hljs-title,
+.dark .hljs-function,
+.dark .hljs-section {
+  color: oklch(0.78 0.12 245);
+}

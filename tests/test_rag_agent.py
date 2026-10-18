@@ -3,7 +3,7 @@
 import pytest
 
 from analyst.agents import placeholders
-from analyst.agents.rag import RagAgent, group_by_page, resolve_citations
+from analyst.agents.rag import RagAgent, group_by_section, resolve_citations
 from analyst.config import Settings
 from analyst.graph import RAG, build_graph
 from analyst.llm import FakeChatModel
@@ -11,7 +11,7 @@ from analyst.rag.retriever import Retriever
 from analyst.rag.vector_store import Hit, VectorStore
 from tests.fakes import BagOfWordsEmbedder
 
-QUESTION = "Summarize the company's revenue trend and key risks, with sources"
+QUESTION = "Summarize Kestrel Ridge's revenue trend and key risks, with sources"
 
 
 def _settings():
@@ -42,24 +42,44 @@ def _prompt_text(messages) -> str:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
-def _hit(doc, page, index, text, score=1.0):
-    rec = {"doc": doc, "page": page, "index": index, "text": text, "title": f"Report {doc}"}
+def _hit(doc, anchor, index, text, score=1.0):
+    rec = {
+        "doc": doc,
+        "anchor": anchor,
+        "section": f"Item {anchor.removeprefix('item-').upper()}. Risk Factors",
+        "index": index,
+        "text": text,
+        "title": f"Acme Corp (ACME) 10-K FY 2024 [{doc}]",
+    }
     return Hit(record=rec, score=score)
 
 
-def test_group_by_page_merges_chunks_and_labels_in_rank_order():
+def test_adjacent_chunks_merge_into_one_passage_in_rank_order():
     hits = [
-        _hit("b.pdf", 4, 1, "second half"),
-        _hit("a.pdf", 2, 0, "other page"),
-        _hit("b.pdf", 4, 0, "first half"),
+        _hit("B_2024.html", "item-1a", 4, "middle. Then the end."),
+        _hit("A_2024.html", "item-1a", 0, "another filing"),
+        _hit("B_2024.html", "item-1a", 3, "The start. In the middle."),  # overlaps c4
+        _hit("B_2024.html", "item-1a", 9, "far away"),  # same Item, not adjacent
     ]
-    excerpts = group_by_page(hits)
-    assert [e.label for e in excerpts] == ["D1", "D2"]
-    first = excerpts[0].source
-    assert first["locator"] == "b.pdf#p4"
+    excerpts = group_by_section(hits)
+    assert [e.label for e in excerpts] == ["D1", "D2", "D3"]
+    first, second, third = (e.source for e in excerpts)
+    assert first["locator"] == "B_2024.html#item-1a/c3-4"  # names the chunks
     assert first["id"].startswith("rag:")
-    assert first["snippet"] == "first half\nsecond half"  # reading order restored
-    assert first["title"] == "Report b.pdf, p. 4"
+    # Reading order restored, and the overlap the chunker repeated is printed once.
+    assert first["snippet"] == "The start. In the middle. Then the end."
+    assert first["title"] == "Acme Corp (ACME) 10-K FY 2024 [B_2024.html], Item 1A. Risk Factors"
+    assert second["locator"] == "A_2024.html#item-1a/c0"
+    assert third["locator"] == "B_2024.html#item-1a/c9"
+
+
+def test_passage_ids_are_stable_content_hashes():
+    from analyst.state import make_source_id
+
+    hits = [_hit("B_2024.html", "item-7", 2, "text")]
+    (excerpt,) = group_by_section(hits)
+    assert excerpt.source["id"] == make_source_id("rag", "B_2024.html#item-7/c2")
+    assert group_by_section(hits)[0].source["id"] == excerpt.source["id"]  # same on every run
 
 
 def test_resolve_citations_maps_labels_and_drops_hallucinations():
@@ -76,7 +96,7 @@ def test_resolve_citations_maps_labels_and_drops_hallucinations():
 # ---------------------------------------------------------------------------
 # The node
 # ---------------------------------------------------------------------------
-def test_answers_from_2024_report_with_year_filter_and_page_sources(retriever):
+def test_answers_from_2024_filing_with_year_filter_and_passage_sources(retriever):
     agent, llm = _agent(
         retriever,
         {"queries": ["risk factors tariffs", "supplier concentration"], "years": [2024]},
@@ -90,13 +110,16 @@ def test_answers_from_2024_report_with_year_filter_and_page_sources(retriever):
     assert "[rag:" in finding["summary"] and "[D1" not in finding["summary"]
     assert finding["source_ids"] == list(out["sources"])  # every cited source is returned
     for source in out["sources"].values():
-        assert source["locator"].startswith("annual_report_2024.pdf#p")  # page-level
+        assert "_2024.html#item-" in source["locator"]  # FY2024 filings only
         assert source["kind"] == "rag"
+    best = out["sources"][finding["source_ids"][0]]  # D1, the top-ranked passage
+    assert best["locator"].startswith("KRO_2024.html#item-1a/c")  # Item + chunk span
+    assert best["title"] == "Kestrel Ridge Outdoor Co. (KRO) 10-K FY 2024, Item 1A. Risk Factors"
 
-    # The year filter reached retrieval: the answer prompt saw 2024 excerpts only.
+    # The year filter reached retrieval: the answer prompt saw FY2024 excerpts only.
     answer_prompt = _prompt_text(llm.history[1])
-    assert "annual_report_2024.pdf#p4" in answer_prompt
-    assert "annual_report_2022" not in answer_prompt and "annual_report_2023" not in answer_prompt
+    assert "KRO_2024.html#item-1a/c" in answer_prompt
+    assert "KRO_2022" not in answer_prompt and "KRO_2023" not in answer_prompt
 
 
 def test_plan_keeps_original_wording_and_drops_unknown_years(retriever):
