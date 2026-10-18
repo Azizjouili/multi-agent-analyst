@@ -327,6 +327,57 @@ writer ──► critic ──► verdict?
 
 **Scoring is deterministic, with no LLM-as-judge:** the same report always gets the same score, scoring costs no quota (so it can run in CI), and a failure names the exact missing pattern. The pipeline itself still calls the LLM. Results go to `evals/results/<timestamp>.json` with the config that produced them, plus a summary table. `--min-answer-hit` / `--min-citation-coverage` make the script exit 1 below a threshold, for CI gating.
 
+### Does the agentic design actually help?
+
+A multi-agent pipeline is only worth its cost if it beats the obvious alternative. `evals/compare.py` runs each eval question through:
+
+- **`baseline`**: **one** LLM call given the top 10 passages from the *same* hybrid retriever and passage grouping the RAG agent uses, asked to cite them as `[D1]`, `[D2]`. No supervisor, no SQL, no critic, no revisions. It's the strongest "just do RAG" contender, not a straw man.
+- **`pipeline`**: the full graph, exactly as `run_evals.py` runs it.
+- **`no_context`** (opt-in, `--methods no_context baseline pipeline`): one call with no documents, to show what grounding is worth.
+
+All three call the same model through the same factory (strong tier, same key, rate limiter and 429 fallback). They are scored by the same deterministic `run_evals.score()`, with quantitative answers resolved from `financials.csv` exactly as in the eval harness. A baseline citation to a passage that doesn't exist (`[D42]`) is kept as an invented id, so the scorer counts what the single call actually did. The agents, by contrast, drop invented labels in code.
+
+```bash
+uv run python evals/compare.py                         # first 3 questions (the default)
+uv run python evals/compare.py --only aapl_revenue_fy2024 aapl_supply_chain_risks_fy2024 \
+    --methods no_context baseline pipeline
+uv run python evals/compare.py --all                   # the full table (see quota below)
+```
+
+**Quota.** A baseline or no-context cell is 1 call; a pipeline cell is about 8–15. The full 12-question table with both default methods is therefore about 110–200 calls, more than a day of Gemini's free tier for the strong model. The script is built for that:
+- it runs a small subset by default;
+- it caches every finished `(question, method)` cell in `evals/results/compare_cache.json`, so a re-run skips it;
+- it stops at the first 429 instead of burning the rest of the budget, and the same command resumes later;
+- it doesn't cache pipeline runs that degraded to `ERROR` findings, so they're retried.
+
+The cache holds raw outputs rather than scores, so fixing a ground-truth pattern re-scores everything with zero calls. Cells marked **†** fell back to the fast model on a 429, so they aren't like-for-like; re-run them with `--fresh --only <id>`.
+
+**First result: a two-question smoke run, not a verdict.** (`gemini-3.8-flash`, 2026-10-18)
+
+| Method | Answer hit | Citation coverage | Invented-citation rate | LLM calls / question |
+|---|---|---|---|---|
+| no_context | 50% | 0% | 0% | 1.5 |
+| baseline | 100% | 100% | 0% | 1.5 |
+| pipeline | 100% | 100% | 0% | 8.5 |
+
+| Question | no_context | baseline | pipeline |
+|---|---|---|---|
+| aapl_revenue_fy2024 | ✅ · 0% · none · 1 | ✅ · 100% · none · 1 | ✅ · 100% · none · 8 |
+| aapl_supply_chain_risks_fy2024 | ❌ · 0% · none · 2 † | ✅ · 100% · none · 2 † | ✅ · 100% · none · 9 |
+
+Cell: answer hit · citation coverage · invented citations · LLM calls. The full 12-question table replaces this one once quota allows.
+
+**Reading it honestly.** On these two questions a single grounded call **ties** the pipeline at about a sixth of the calls. Even the no-context call knew Apple's FY2024 revenue from memory: a famous, frequently quoted figure isn't a test of grounding. That's expected. Both questions have their answer stated in one Item of one filing, which is exactly the case where one retrieval plus one call is enough, and where the multi-agent design is overhead. Grounding still matters: the no-context answer had no citations at all, so a reader couldn't check it, and it missed the risk question.
+
+The pipeline should earn its cost on the questions this subset doesn't cover:
+- figures that must be *computed* (NVIDIA's growth rate, Meta's R&D share of revenue), which the SQL agent derives exactly from XBRL while the baseline only sees narrative text;
+- questions that span several companies or fiscal years, which one retrieval with the raw question covers poorly;
+- citation accuracy under pressure, where the critic's deterministic gate and the citation resolvers stop invented or missing citations from reaching the reader.
+
+Part of that last advantage is cheap code, not agents: the same resolver could be bolted onto a single call. Until the full run is in, treat these points as hypotheses with a test bench, not results.
+
+One ground-truth fix came out of this run. The supply-chain question's patterns were narrower than the filing: Apple writes both "single-source" and "single or limited sources". Both correct reports missed it, so the patterns now accept the filing's own phrasings, and the evidence test re-checks each one against Apple's Item 1A.
+
 ---
 
 ## 7. Proposed folder structure
@@ -396,6 +447,7 @@ multi-agent-analyst/
 │   ├── questions.yaml          # XBRL facts (quantitative) + regexes with evidence (qualitative)
 │   ├── ground_truth.py         # facts → tolerant regexes from financials.csv
 │   ├── run_evals.py            # run the pipeline, score deterministically, write JSON
+│   ├── compare.py              # one-shot baseline (and no-context) vs pipeline, cached, Markdown table
 │   └── results/                # timestamped results (git-ignored)
 │
 ├── scripts/
@@ -431,3 +483,4 @@ Each step is small, runnable, and explained before moving on.
 16. ✅ Web UI at `/` (one static page over the same API: ask, live status, approve or send feedback, rendered report)
 17. ✅ React frontend (Vite + TS + Tailwind + shadcn/ui): chat thread, live agent timeline from the additive `stages` field, review gate, citation badges, dark mode; built in a Node Docker stage
 18. ✅ Real corpus from SEC EDGAR: pinned manifest (12 companies × 3 10-Ks), resumable fetcher, Item-segmented 10-K loader, company/FY/Item/chunk citations, XBRL `financials` table, evals with ground truth derived from XBRL
+19. ✅ Baseline comparison (`evals/compare.py`): one-shot grounded call and no-context call vs the pipeline, same model and scorer, cached and quota-safe

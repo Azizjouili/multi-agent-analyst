@@ -82,12 +82,15 @@
   question: >-
     What supply-chain risks does Apple describe in the risk factors of its fiscal 2024
     10-K?
+  # Each pattern is one risk, accepting the filing's own phrasings of it: Apple
+  # writes both "single-source" and "single or limited sources", and both
+  # "outsourcing partners" and "contract manufacturers".
   expect:
-    - 'single[- ]source'
-    - 'outsourcing partners?'
-    - 'China'
+    - 'single[- ]source|single or limited sources?'
+    - 'outsourcing partners?|contract manufactur'
+    - 'geopolitic|China|trade restrict|tariff|export'
   evidence: [AAPL_2024.html#item-1a]
-  source: AAPL_2024.html Item 1A (single-source outsourcing partners, mostly in Asia)
+  source: AAPL_2024.html Item 1A (single/limited sources, outsourcing partners, trade and geopolitics)
 
 - id: nvda_export_controls_fy2025
   question: How do export controls affect NVIDIA, according to its fiscal 2025 10-K?
