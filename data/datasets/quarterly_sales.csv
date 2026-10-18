@@ -1,0 +1,289 @@
+period,year,quarter,region,product_line,channel,units_sold,revenue_usd,cost_of_goods_usd
+2022-Q1,2022,1,North America,Tents & Shelters,Direct-to-Consumer,18529,4446892.33,1689819.09
+2022-Q1,2022,1,North America,Tents & Shelters,Wholesale,33152,7956590.29,4455690.56
+2022-Q1,2022,1,North America,Packs & Bags,Direct-to-Consumer,35981,3418228.6,1298926.87
+2022-Q1,2022,1,North America,Packs & Bags,Wholesale,66612,6328131.67,3543753.74
+2022-Q1,2022,1,North America,Apparel,Direct-to-Consumer,110631,6637862.25,2522387.66
+2022-Q1,2022,1,North America,Apparel,Wholesale,204731,12283866.94,6878965.49
+2022-Q1,2022,1,North America,Footwear,Direct-to-Consumer,24250,3152474.78,1197940.42
+2022-Q1,2022,1,North America,Footwear,Wholesale,42910,5578237.41,3123812.95
+2022-Q1,2022,1,Europe,Tents & Shelters,Direct-to-Consumer,7838,1881145.93,714835.45
+2022-Q1,2022,1,Europe,Tents & Shelters,Wholesale,14212,3410975.29,1910146.16
+2022-Q1,2022,1,Europe,Packs & Bags,Direct-to-Consumer,16299,1548411.29,588396.29
+2022-Q1,2022,1,Europe,Packs & Bags,Wholesale,30799,2925939.85,1638526.32
+2022-Q1,2022,1,Europe,Apparel,Direct-to-Consumer,49875,2992503.85,1137151.46
+2022-Q1,2022,1,Europe,Apparel,Wholesale,93611,5616641.08,3145319.0
+2022-Q1,2022,1,Europe,Footwear,Direct-to-Consumer,11953,1553849.32,590462.74
+2022-Q1,2022,1,Europe,Footwear,Wholesale,22059,2867711.96,1605918.7
+2022-Q1,2022,1,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,3097,743319.19,282461.29
+2022-Q1,2022,1,Asia-Pacific,Tents & Shelters,Wholesale,5881,1411519.74,790451.05
+2022-Q1,2022,1,Asia-Pacific,Packs & Bags,Direct-to-Consumer,6755,641696.47,243844.66
+2022-Q1,2022,1,Asia-Pacific,Packs & Bags,Wholesale,11951,1135356.21,635799.48
+2022-Q1,2022,1,Asia-Pacific,Apparel,Direct-to-Consumer,23524,1411431.93,536344.13
+2022-Q1,2022,1,Asia-Pacific,Apparel,Wholesale,43410,2604600.65,1458576.36
+2022-Q1,2022,1,Asia-Pacific,Footwear,Direct-to-Consumer,4693,610095.66,231836.35
+2022-Q1,2022,1,Asia-Pacific,Footwear,Wholesale,8618,1120352.11,627397.18
+2022-Q2,2022,2,North America,Tents & Shelters,Direct-to-Consumer,33563,8055073.03,3060927.75
+2022-Q2,2022,2,North America,Tents & Shelters,Wholesale,60072,14417248.99,8073659.43
+2022-Q2,2022,2,North America,Packs & Bags,Direct-to-Consumer,63258,6009478.86,2283601.97
+2022-Q2,2022,2,North America,Packs & Bags,Wholesale,117507,11163186.12,6251384.23
+2022-Q2,2022,2,North America,Apparel,Direct-to-Consumer,111358,6681461.04,2538955.2
+2022-Q2,2022,2,North America,Apparel,Wholesale,203844,12230647.39,6849162.54
+2022-Q2,2022,2,North America,Footwear,Direct-to-Consumer,24129,3136757.3,1191967.77
+2022-Q2,2022,2,North America,Footwear,Wholesale,44606,5798843.95,3247352.61
+2022-Q2,2022,2,Europe,Tents & Shelters,Direct-to-Consumer,14030,3367303.58,1279575.36
+2022-Q2,2022,2,Europe,Tents & Shelters,Wholesale,26738,6417134.54,3593595.34
+2022-Q2,2022,2,Europe,Packs & Bags,Direct-to-Consumer,29259,2779593.78,1056245.64
+2022-Q2,2022,2,Europe,Packs & Bags,Wholesale,54908,5216236.68,2921092.54
+2022-Q2,2022,2,Europe,Apparel,Direct-to-Consumer,52348,3140873.98,1193532.11
+2022-Q2,2022,2,Europe,Apparel,Wholesale,96011,5760675.98,3225978.55
+2022-Q2,2022,2,Europe,Footwear,Direct-to-Consumer,12103,1573421.72,597900.25
+2022-Q2,2022,2,Europe,Footwear,Wholesale,22102,2873273.63,1609033.23
+2022-Q2,2022,2,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,5669,1360496.67,516988.73
+2022-Q2,2022,2,Asia-Pacific,Tents & Shelters,Wholesale,10117,2427982.66,1359670.29
+2022-Q2,2022,2,Asia-Pacific,Packs & Bags,Direct-to-Consumer,11597,1101714.76,418651.61
+2022-Q2,2022,2,Asia-Pacific,Packs & Bags,Wholesale,21618,2053715.62,1150080.75
+2022-Q2,2022,2,Asia-Pacific,Apparel,Direct-to-Consumer,22518,1351055.5,513401.09
+2022-Q2,2022,2,Asia-Pacific,Apparel,Wholesale,42212,2532732.22,1418330.04
+2022-Q2,2022,2,Asia-Pacific,Footwear,Direct-to-Consumer,4625,601253.01,228476.14
+2022-Q2,2022,2,Asia-Pacific,Footwear,Wholesale,8683,1128760.11,632105.66
+2022-Q3,2022,3,North America,Tents & Shelters,Direct-to-Consumer,30874,7409836.84,2815738.0
+2022-Q3,2022,3,North America,Tents & Shelters,Wholesale,56414,13539297.55,7582006.63
+2022-Q3,2022,3,North America,Packs & Bags,Direct-to-Consumer,60316,5730017.71,2177406.73
+2022-Q3,2022,3,North America,Packs & Bags,Wholesale,110927,10538067.77,5901317.95
+2022-Q3,2022,3,North America,Apparel,Direct-to-Consumer,117336,7040173.3,2675265.85
+2022-Q3,2022,3,North America,Apparel,Wholesale,226790,13607402.39,7620145.34
+2022-Q3,2022,3,North America,Footwear,Direct-to-Consumer,26076,3389843.93,1288140.69
+2022-Q3,2022,3,North America,Footwear,Wholesale,48314,6280858.65,3517280.84
+2022-Q3,2022,3,Europe,Tents & Shelters,Direct-to-Consumer,12866,3087845.2,1173381.18
+2022-Q3,2022,3,Europe,Tents & Shelters,Wholesale,24710,5930423.51,3321037.17
+2022-Q3,2022,3,Europe,Packs & Bags,Direct-to-Consumer,27074,2571985.89,977354.64
+2022-Q3,2022,3,Europe,Packs & Bags,Wholesale,50945,4839740.72,2710254.8
+2022-Q3,2022,3,Europe,Apparel,Direct-to-Consumer,57645,3458687.91,1314301.41
+2022-Q3,2022,3,Europe,Apparel,Wholesale,104874,6292415.91,3523752.91
+2022-Q3,2022,3,Europe,Footwear,Direct-to-Consumer,12967,1685740.53,640581.4
+2022-Q3,2022,3,Europe,Footwear,Wholesale,24266,3154559.79,1766553.48
+2022-Q3,2022,3,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,5358,1285919.61,488649.45
+2022-Q3,2022,3,Asia-Pacific,Tents & Shelters,Wholesale,9911,2378750.39,1332100.22
+2022-Q3,2022,3,Asia-Pacific,Packs & Bags,Direct-to-Consumer,10873,1032930.03,392513.41
+2022-Q3,2022,3,Asia-Pacific,Packs & Bags,Wholesale,19950,1895255.73,1061343.21
+2022-Q3,2022,3,Asia-Pacific,Apparel,Direct-to-Consumer,24921,1495257.9,568198.0
+2022-Q3,2022,3,Asia-Pacific,Apparel,Wholesale,46148,2768868.98,1550566.63
+2022-Q3,2022,3,Asia-Pacific,Footwear,Direct-to-Consumer,5080,660346.83,250931.8
+2022-Q3,2022,3,Asia-Pacific,Footwear,Wholesale,9855,1281165.08,717452.44
+2022-Q4,2022,4,North America,Tents & Shelters,Direct-to-Consumer,20878,5010652.08,1904047.79
+2022-Q4,2022,4,North America,Tents & Shelters,Wholesale,37495,8998814.12,5039335.91
+2022-Q4,2022,4,North America,Packs & Bags,Direct-to-Consumer,40904,3885906.33,1476644.41
+2022-Q4,2022,4,North America,Packs & Bags,Wholesale,74792,7105226.09,3978926.61
+2022-Q4,2022,4,North America,Apparel,Direct-to-Consumer,162613,9756789.58,3707580.04
+2022-Q4,2022,4,North America,Apparel,Wholesale,293939,17636350.05,9876356.03
+2022-Q4,2022,4,North America,Footwear,Direct-to-Consumer,33975,4416799.79,1678383.92
+2022-Q4,2022,4,North America,Footwear,Wholesale,63027,8193516.45,4588369.21
+2022-Q4,2022,4,Europe,Tents & Shelters,Direct-to-Consumer,8782,2107732.38,800938.3
+2022-Q4,2022,4,Europe,Tents & Shelters,Wholesale,16019,3844481.54,2152909.66
+2022-Q4,2022,4,Europe,Packs & Bags,Direct-to-Consumer,18515,1758881.53,668374.98
+2022-Q4,2022,4,Europe,Packs & Bags,Wholesale,35027,3327575.46,1863442.26
+2022-Q4,2022,4,Europe,Apparel,Direct-to-Consumer,74216,4452958.86,1692124.37
+2022-Q4,2022,4,Europe,Apparel,Wholesale,136331,8179884.92,4580735.56
+2022-Q4,2022,4,Europe,Footwear,Direct-to-Consumer,17745,2306869.05,876610.24
+2022-Q4,2022,4,Europe,Footwear,Wholesale,32018,4162377.76,2330931.55
+2022-Q4,2022,4,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,3414,819381.83,311365.1
+2022-Q4,2022,4,Asia-Pacific,Tents & Shelters,Wholesale,6323,1517610.09,849861.65
+2022-Q4,2022,4,Asia-Pacific,Packs & Bags,Direct-to-Consumer,7196,683605.26,259770.0
+2022-Q4,2022,4,Asia-Pacific,Packs & Bags,Wholesale,13789,1309940.79,733566.84
+2022-Q4,2022,4,Asia-Pacific,Apparel,Direct-to-Consumer,34189,2051329.92,779505.37
+2022-Q4,2022,4,Asia-Pacific,Apparel,Wholesale,62109,3726514.01,2086847.85
+2022-Q4,2022,4,Asia-Pacific,Footwear,Direct-to-Consumer,6712,872535.25,331563.4
+2022-Q4,2022,4,Asia-Pacific,Footwear,Wholesale,12709,1652180.87,925221.29
+2023-Q1,2023,1,North America,Tents & Shelters,Direct-to-Consumer,19928,4782609.98,1913043.99
+2023-Q1,2023,1,North America,Tents & Shelters,Wholesale,29078,6978709.57,4047651.55
+2023-Q1,2023,1,North America,Packs & Bags,Direct-to-Consumer,40719,3868331.81,1547332.72
+2023-Q1,2023,1,North America,Packs & Bags,Wholesale,60686,5765152.79,3343788.62
+2023-Q1,2023,1,North America,Apparel,Direct-to-Consumer,112663,6759760.75,2703904.3
+2023-Q1,2023,1,North America,Apparel,Wholesale,176403,10584157.22,6138811.19
+2023-Q1,2023,1,North America,Footwear,Direct-to-Consumer,26524,3448067.54,1379227.02
+2023-Q1,2023,1,North America,Footwear,Wholesale,39444,5127669.12,2974048.09
+2023-Q1,2023,1,Europe,Tents & Shelters,Direct-to-Consumer,7747,1859298.42,743719.37
+2023-Q1,2023,1,Europe,Tents & Shelters,Wholesale,11885,2852442.8,1654416.82
+2023-Q1,2023,1,Europe,Packs & Bags,Direct-to-Consumer,16655,1582242.87,632897.15
+2023-Q1,2023,1,Europe,Packs & Bags,Wholesale,25479,2420488.77,1403883.49
+2023-Q1,2023,1,Europe,Apparel,Direct-to-Consumer,51600,3096019.73,1238407.89
+2023-Q1,2023,1,Europe,Apparel,Wholesale,79729,4783764.16,2774583.21
+2023-Q1,2023,1,Europe,Footwear,Direct-to-Consumer,12709,1652115.48,660846.19
+2023-Q1,2023,1,Europe,Footwear,Wholesale,18378,2389114.12,1385686.19
+2023-Q1,2023,1,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,4121,988969.18,395587.67
+2023-Q1,2023,1,Asia-Pacific,Tents & Shelters,Wholesale,6062,1454800.3,843784.17
+2023-Q1,2023,1,Asia-Pacific,Packs & Bags,Direct-to-Consumer,9165,870634.12,348253.65
+2023-Q1,2023,1,Asia-Pacific,Packs & Bags,Wholesale,13713,1302731.33,755584.17
+2023-Q1,2023,1,Asia-Pacific,Apparel,Direct-to-Consumer,30160,1809585.82,723834.33
+2023-Q1,2023,1,Asia-Pacific,Apparel,Wholesale,46175,2770513.11,1606897.6
+2023-Q1,2023,1,Asia-Pacific,Footwear,Direct-to-Consumer,6561,852874.45,341149.78
+2023-Q1,2023,1,Asia-Pacific,Footwear,Wholesale,9573,1244527.09,721825.71
+2023-Q2,2023,2,North America,Tents & Shelters,Direct-to-Consumer,34945,8386687.43,3354674.97
+2023-Q2,2023,2,North America,Tents & Shelters,Wholesale,51726,12414222.46,7200249.03
+2023-Q2,2023,2,North America,Packs & Bags,Direct-to-Consumer,71577,6799807.23,2719922.89
+2023-Q2,2023,2,North America,Packs & Bags,Wholesale,105792,10050270.48,5829156.88
+2023-Q2,2023,2,North America,Apparel,Direct-to-Consumer,112587,6755202.56,2702081.02
+2023-Q2,2023,2,North America,Apparel,Wholesale,172260,10335609.95,5994653.77
+2023-Q2,2023,2,North America,Footwear,Direct-to-Consumer,25481,3312539.57,1325015.83
+2023-Q2,2023,2,North America,Footwear,Wholesale,40370,5248044.35,3043865.72
+2023-Q2,2023,2,Europe,Tents & Shelters,Direct-to-Consumer,14285,3428495.82,1371398.33
+2023-Q2,2023,2,Europe,Tents & Shelters,Wholesale,21369,5128546.41,2974556.92
+2023-Q2,2023,2,Europe,Packs & Bags,Direct-to-Consumer,29966,2846738.44,1138695.38
+2023-Q2,2023,2,Europe,Packs & Bags,Wholesale,44268,4205414.2,2439140.24
+2023-Q2,2023,2,Europe,Apparel,Direct-to-Consumer,52918,3175055.02,1270022.01
+2023-Q2,2023,2,Europe,Apparel,Wholesale,79697,4781845.54,2773470.41
+2023-Q2,2023,2,Europe,Footwear,Direct-to-Consumer,12119,1575512.91,630205.16
+2023-Q2,2023,2,Europe,Footwear,Wholesale,18627,2421482.86,1404460.06
+2023-Q2,2023,2,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,7136,1712663.41,685065.36
+2023-Q2,2023,2,Asia-Pacific,Tents & Shelters,Wholesale,11160,2678393.35,1553468.14
+2023-Q2,2023,2,Asia-Pacific,Packs & Bags,Direct-to-Consumer,16153,1534490.98,613796.39
+2023-Q2,2023,2,Asia-Pacific,Packs & Bags,Wholesale,23317,2215085.02,1284749.31
+2023-Q2,2023,2,Asia-Pacific,Apparel,Direct-to-Consumer,30484,1829021.03,731608.41
+2023-Q2,2023,2,Asia-Pacific,Apparel,Wholesale,45930,2755816.84,1598373.77
+2023-Q2,2023,2,Asia-Pacific,Footwear,Direct-to-Consumer,6426,835389.86,334155.94
+2023-Q2,2023,2,Asia-Pacific,Footwear,Wholesale,9995,1299403.38,753653.96
+2023-Q3,2023,3,North America,Tents & Shelters,Direct-to-Consumer,32104,7704902.49,3081961.0
+2023-Q3,2023,3,North America,Tents & Shelters,Wholesale,47542,11410123.07,6617871.38
+2023-Q3,2023,3,North America,Packs & Bags,Direct-to-Consumer,66156,6284783.19,2513913.28
+2023-Q3,2023,3,North America,Packs & Bags,Wholesale,100366,9534750.1,5530155.06
+2023-Q3,2023,3,North America,Apparel,Direct-to-Consumer,124346,7460739.39,2984295.76
+2023-Q3,2023,3,North America,Apparel,Wholesale,187778,11266705.46,6534689.17
+2023-Q3,2023,3,North America,Footwear,Direct-to-Consumer,29473,3831505.86,1532602.34
+2023-Q3,2023,3,North America,Footwear,Wholesale,43320,5631632.12,3266346.63
+2023-Q3,2023,3,Europe,Tents & Shelters,Direct-to-Consumer,13046,3131127.66,1252451.06
+2023-Q3,2023,3,Europe,Tents & Shelters,Wholesale,19663,4719171.36,2737119.39
+2023-Q3,2023,3,Europe,Packs & Bags,Direct-to-Consumer,27775,2638602.68,1055441.07
+2023-Q3,2023,3,Europe,Packs & Bags,Wholesale,41927,3983101.45,2310198.84
+2023-Q3,2023,3,Europe,Apparel,Direct-to-Consumer,55900,3353976.91,1341590.76
+2023-Q3,2023,3,Europe,Apparel,Wholesale,85121,5107238.19,2962198.15
+2023-Q3,2023,3,Europe,Footwear,Direct-to-Consumer,13339,1734018.66,693607.46
+2023-Q3,2023,3,Europe,Footwear,Wholesale,19996,2599457.97,1507685.62
+2023-Q3,2023,3,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,6691,1605798.03,642319.21
+2023-Q3,2023,3,Asia-Pacific,Tents & Shelters,Wholesale,10382,2491783.83,1445234.62
+2023-Q3,2023,3,Asia-Pacific,Packs & Bags,Direct-to-Consumer,14663,1392970.89,557188.36
+2023-Q3,2023,3,Asia-Pacific,Packs & Bags,Wholesale,22902,2175666.73,1261886.7
+2023-Q3,2023,3,Asia-Pacific,Apparel,Direct-to-Consumer,34023,2041377.88,816551.15
+2023-Q3,2023,3,Asia-Pacific,Apparel,Wholesale,48670,2920210.36,1693722.01
+2023-Q3,2023,3,Asia-Pacific,Footwear,Direct-to-Consumer,6999,909834.04,363933.62
+2023-Q3,2023,3,Asia-Pacific,Footwear,Wholesale,10774,1400604.94,812350.87
+2023-Q4,2023,4,North America,Tents & Shelters,Direct-to-Consumer,21133,5071920.86,2028768.34
+2023-Q4,2023,4,North America,Tents & Shelters,Wholesale,31541,7569832.39,4390502.79
+2023-Q4,2023,4,North America,Packs & Bags,Direct-to-Consumer,45150,4289226.97,1715690.79
+2023-Q4,2023,4,North America,Packs & Bags,Wholesale,66281,6296726.41,3652101.32
+2023-Q4,2023,4,North America,Apparel,Direct-to-Consumer,168545,10112670.63,4045068.25
+2023-Q4,2023,4,North America,Apparel,Wholesale,257556,15453389.09,8962965.67
+2023-Q4,2023,4,North America,Footwear,Direct-to-Consumer,38868,5052814.72,2021125.89
+2023-Q4,2023,4,North America,Footwear,Wholesale,56182,7303683.32,4236136.33
+2023-Q4,2023,4,Europe,Tents & Shelters,Direct-to-Consumer,8519,2044529.37,817811.75
+2023-Q4,2023,4,Europe,Tents & Shelters,Wholesale,13041,3129798.46,1815283.11
+2023-Q4,2023,4,Europe,Packs & Bags,Direct-to-Consumer,18860,1791746.49,716698.6
+2023-Q4,2023,4,Europe,Packs & Bags,Wholesale,28365,2694658.0,1562901.64
+2023-Q4,2023,4,Europe,Apparel,Direct-to-Consumer,76298,4577908.19,1831163.28
+2023-Q4,2023,4,Europe,Apparel,Wholesale,114070,6844219.79,3969647.48
+2023-Q4,2023,4,Europe,Footwear,Direct-to-Consumer,18603,2418349.62,967339.85
+2023-Q4,2023,4,Europe,Footwear,Wholesale,26463,3440182.49,1995305.84
+2023-Q4,2023,4,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,4552,1092395.92,436958.37
+2023-Q4,2023,4,Asia-Pacific,Tents & Shelters,Wholesale,6801,1632332.08,946752.61
+2023-Q4,2023,4,Asia-Pacific,Packs & Bags,Direct-to-Consumer,10152,964485.13,385794.05
+2023-Q4,2023,4,Asia-Pacific,Packs & Bags,Wholesale,14680,1394645.84,808894.59
+2023-Q4,2023,4,Asia-Pacific,Apparel,Direct-to-Consumer,43580,2614822.17,1045928.87
+2023-Q4,2023,4,Asia-Pacific,Apparel,Wholesale,66403,3984196.39,2310833.91
+2023-Q4,2023,4,Asia-Pacific,Footwear,Direct-to-Consumer,9436,1226709.61,490683.84
+2023-Q4,2023,4,Asia-Pacific,Footwear,Wholesale,14032,1824164.99,1058015.69
+2024-Q1,2024,1,North America,Tents & Shelters,Direct-to-Consumer,24739,5937352.4,2196820.39
+2024-Q1,2024,1,North America,Tents & Shelters,Wholesale,30233,7255865.71,3990726.14
+2024-Q1,2024,1,North America,Packs & Bags,Direct-to-Consumer,51595,4901537.93,1813569.03
+2024-Q1,2024,1,North America,Packs & Bags,Wholesale,62093,5898858.85,3244372.37
+2024-Q1,2024,1,North America,Apparel,Direct-to-Consumer,155304,9318211.81,3447738.37
+2024-Q1,2024,1,North America,Apparel,Wholesale,176863,10611767.29,5836472.01
+2024-Q1,2024,1,North America,Footwear,Direct-to-Consumer,39127,5086504.19,1882006.55
+2024-Q1,2024,1,North America,Footwear,Wholesale,45495,5914325.99,3252879.29
+2024-Q1,2024,1,Europe,Tents & Shelters,Direct-to-Consumer,10292,2470131.31,913948.58
+2024-Q1,2024,1,Europe,Tents & Shelters,Wholesale,12052,2892505.58,1590878.07
+2024-Q1,2024,1,Europe,Packs & Bags,Direct-to-Consumer,22343,2122606.57,785364.43
+2024-Q1,2024,1,Europe,Packs & Bags,Wholesale,25177,2391826.09,1315504.35
+2024-Q1,2024,1,Europe,Apparel,Direct-to-Consumer,67705,4062308.37,1503054.1
+2024-Q1,2024,1,Europe,Apparel,Wholesale,78182,4690933.32,2580013.33
+2024-Q1,2024,1,Europe,Footwear,Direct-to-Consumer,17560,2282795.16,844634.21
+2024-Q1,2024,1,Europe,Footwear,Wholesale,20188,2624419.5,1443430.73
+2024-Q1,2024,1,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,6198,1487468.37,550363.3
+2024-Q1,2024,1,Asia-Pacific,Tents & Shelters,Wholesale,7542,1810148.69,995581.78
+2024-Q1,2024,1,Asia-Pacific,Packs & Bags,Direct-to-Consumer,13457,1278381.06,473000.99
+2024-Q1,2024,1,Asia-Pacific,Packs & Bags,Wholesale,16296,1548095.92,851452.76
+2024-Q1,2024,1,Asia-Pacific,Apparel,Direct-to-Consumer,47415,2844924.94,1052622.23
+2024-Q1,2024,1,Asia-Pacific,Apparel,Wholesale,55554,3333264.75,1833295.61
+2024-Q1,2024,1,Asia-Pacific,Footwear,Direct-to-Consumer,11319,1471480.14,544447.65
+2024-Q1,2024,1,Asia-Pacific,Footwear,Wholesale,13317,1731233.59,952178.47
+2024-Q2,2024,2,North America,Tents & Shelters,Direct-to-Consumer,44800,10752017.34,3978246.42
+2024-Q2,2024,2,North America,Tents & Shelters,Wholesale,53103,12744692.47,7009580.86
+2024-Q2,2024,2,North America,Packs & Bags,Direct-to-Consumer,90132,8562579.23,3168154.32
+2024-Q2,2024,2,North America,Packs & Bags,Wholesale,106728,10139120.64,5576516.35
+2024-Q2,2024,2,North America,Apparel,Direct-to-Consumer,159190,9551423.1,3534026.55
+2024-Q2,2024,2,North America,Apparel,Wholesale,182628,10957651.65,6026708.41
+2024-Q2,2024,2,North America,Footwear,Direct-to-Consumer,38085,4951063.01,1831893.31
+2024-Q2,2024,2,North America,Footwear,Wholesale,45259,5883697.41,3236033.58
+2024-Q2,2024,2,Europe,Tents & Shelters,Direct-to-Consumer,17324,4157670.25,1538337.99
+2024-Q2,2024,2,Europe,Tents & Shelters,Wholesale,20997,5039288.61,2771608.74
+2024-Q2,2024,2,Europe,Packs & Bags,Direct-to-Consumer,38914,3696824.13,1367824.93
+2024-Q2,2024,2,Europe,Packs & Bags,Wholesale,46640,4430835.27,2436959.4
+2024-Q2,2024,2,Europe,Apparel,Direct-to-Consumer,66371,3982242.37,1473429.68
+2024-Q2,2024,2,Europe,Apparel,Wholesale,81748,4904864.14,2697675.28
+2024-Q2,2024,2,Europe,Footwear,Direct-to-Consumer,17220,2238575.71,828273.01
+2024-Q2,2024,2,Europe,Footwear,Wholesale,20346,2644992.23,1454745.73
+2024-Q2,2024,2,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,11162,2678920.08,991200.43
+2024-Q2,2024,2,Asia-Pacific,Tents & Shelters,Wholesale,13166,3159862.06,1737924.13
+2024-Q2,2024,2,Asia-Pacific,Packs & Bags,Direct-to-Consumer,23879,2268528.28,839355.46
+2024-Q2,2024,2,Asia-Pacific,Packs & Bags,Wholesale,27835,2644331.7,1454382.44
+2024-Q2,2024,2,Asia-Pacific,Apparel,Direct-to-Consumer,48657,2919426.22,1080187.7
+2024-Q2,2024,2,Asia-Pacific,Apparel,Wholesale,54962,3297742.96,1813758.63
+2024-Q2,2024,2,Asia-Pacific,Footwear,Direct-to-Consumer,11079,1440304.52,532912.67
+2024-Q2,2024,2,Asia-Pacific,Footwear,Wholesale,13025,1693300.26,931315.14
+2024-Q3,2024,3,North America,Tents & Shelters,Direct-to-Consumer,41657,9997710.07,3699152.73
+2024-Q3,2024,3,North America,Tents & Shelters,Wholesale,49387,11852807.85,6519044.32
+2024-Q3,2024,3,North America,Packs & Bags,Direct-to-Consumer,86404,8208405.27,3037109.95
+2024-Q3,2024,3,North America,Packs & Bags,Wholesale,103935,9873785.48,5430582.01
+2024-Q3,2024,3,North America,Apparel,Direct-to-Consumer,165915,9954884.99,3683307.45
+2024-Q3,2024,3,North America,Apparel,Wholesale,200860,12051605.66,6628383.11
+2024-Q3,2024,3,North America,Footwear,Direct-to-Consumer,40793,5303049.92,1962128.47
+2024-Q3,2024,3,North America,Footwear,Wholesale,48346,6284933.98,3456713.69
+2024-Q3,2024,3,Europe,Tents & Shelters,Direct-to-Consumer,16856,4045457.0,1496819.09
+2024-Q3,2024,3,Europe,Tents & Shelters,Wholesale,19351,4644184.07,2554301.24
+2024-Q3,2024,3,Europe,Packs & Bags,Direct-to-Consumer,36073,3426961.25,1267975.66
+2024-Q3,2024,3,Europe,Packs & Bags,Wholesale,43466,4129292.37,2271110.8
+2024-Q3,2024,3,Europe,Apparel,Direct-to-Consumer,72028,4321673.08,1599019.04
+2024-Q3,2024,3,Europe,Apparel,Wholesale,86563,5193777.64,2856577.7
+2024-Q3,2024,3,Europe,Footwear,Direct-to-Consumer,19847,2580120.39,954644.54
+2024-Q3,2024,3,Europe,Footwear,Wholesale,23296,3028420.9,1665631.5
+2024-Q3,2024,3,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,10139,2433307.57,900323.8
+2024-Q3,2024,3,Asia-Pacific,Tents & Shelters,Wholesale,12005,2881097.82,1584603.8
+2024-Q3,2024,3,Asia-Pacific,Packs & Bags,Direct-to-Consumer,22428,2130634.76,788334.86
+2024-Q3,2024,3,Asia-Pacific,Packs & Bags,Wholesale,27399,2602868.66,1431577.76
+2024-Q3,2024,3,Asia-Pacific,Apparel,Direct-to-Consumer,53051,3183069.13,1177735.58
+2024-Q3,2024,3,Asia-Pacific,Apparel,Wholesale,62272,3736297.0,2054963.35
+2024-Q3,2024,3,Asia-Pacific,Footwear,Direct-to-Consumer,11924,1550149.9,573555.46
+2024-Q3,2024,3,Asia-Pacific,Footwear,Wholesale,13819,1796435.62,988039.59
+2024-Q4,2024,4,North America,Tents & Shelters,Direct-to-Consumer,28465,6831717.41,2527735.44
+2024-Q4,2024,4,North America,Tents & Shelters,Wholesale,33160,7958418.74,4377130.31
+2024-Q4,2024,4,North America,Packs & Bags,Direct-to-Consumer,57910,5501417.8,2035524.59
+2024-Q4,2024,4,North America,Packs & Bags,Wholesale,69503,6602741.85,3631508.02
+2024-Q4,2024,4,North America,Apparel,Direct-to-Consumer,227297,13637800.55,5045986.2
+2024-Q4,2024,4,North America,Apparel,Wholesale,256577,15394594.7,8467027.09
+2024-Q4,2024,4,North America,Footwear,Direct-to-Consumer,56308,7320032.39,2708411.98
+2024-Q4,2024,4,North America,Footwear,Wholesale,64086,8331133.99,4582123.69
+2024-Q4,2024,4,Europe,Tents & Shelters,Direct-to-Consumer,11232,2695641.7,997387.43
+2024-Q4,2024,4,Europe,Tents & Shelters,Wholesale,13401,3216257.23,1768941.48
+2024-Q4,2024,4,Europe,Packs & Bags,Direct-to-Consumer,23783,2259430.12,835989.14
+2024-Q4,2024,4,Europe,Packs & Bags,Wholesale,27887,2649305.32,1457117.93
+2024-Q4,2024,4,Europe,Apparel,Direct-to-Consumer,96241,5774470.03,2136553.91
+2024-Q4,2024,4,Europe,Apparel,Wholesale,116076,6964582.83,3830520.56
+2024-Q4,2024,4,Europe,Footwear,Direct-to-Consumer,25343,3294637.4,1219015.84
+2024-Q4,2024,4,Europe,Footwear,Wholesale,30353,3945840.98,2170212.54
+2024-Q4,2024,4,Asia-Pacific,Tents & Shelters,Direct-to-Consumer,7027,1686569.26,624030.63
+2024-Q4,2024,4,Asia-Pacific,Tents & Shelters,Wholesale,7998,1919611.2,1055786.16
+2024-Q4,2024,4,Asia-Pacific,Packs & Bags,Direct-to-Consumer,15288,1452323.96,537359.87
+2024-Q4,2024,4,Asia-Pacific,Packs & Bags,Wholesale,17551,1667329.84,917031.41
+2024-Q4,2024,4,Asia-Pacific,Apparel,Direct-to-Consumer,69107,4146418.53,1534174.86
+2024-Q4,2024,4,Asia-Pacific,Apparel,Wholesale,83156,4989347.28,2744141.0
+2024-Q4,2024,4,Asia-Pacific,Footwear,Direct-to-Consumer,16357,2126434.06,786780.6
+2024-Q4,2024,4,Asia-Pacific,Footwear,Wholesale,18351,2385644.4,1312104.42

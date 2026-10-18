@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# Secrets
+.env
+
+# Generated data (rebuilt by scripts/ and the ingest CLI)
+data/index/
+data/*.db
+checkpoints.db
+evals/results/

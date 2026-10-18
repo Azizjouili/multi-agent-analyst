@@ -1,0 +1,40 @@
+# docker compose up --build -d             # build the image and start the API
+# docker compose run --rm indexer          # one-off: build the SQLite DB + vector index
+# See "Running with Docker" in the README.
+
+# Shared by both services: same image, same data volume, same runtime config.
+x-app: &app
+  build: .
+  image: multi-agent-analyst:latest
+  volumes:
+    # data/ lives on the host, not in the container: the index, the SQLite
+    # database and the paused-run checkpoints survive rebuilds and restarts,
+    # and the indexer's output is what the API reads.
+    - ./data:/app/data
+  # Optional: the rest of your settings (models, budgets, Langfuse keys) from
+  # .env, read at runtime. The image itself never contains .env.
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    # Taken from your shell, or from .env (compose reads it for ${...}).
+    # Empty is allowed so the indexer runs without a key; the API then
+    # answers /health but runs fail with a clear "GOOGLE_API_KEY is not set".
+    GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+
+services:
+  api:
+    <<: *app
+    ports:
+      # Bound to localhost only: the API has no authentication. Change to
+      # "8000:8000" only behind a proxy that adds auth.
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  indexer:
+    <<: *app
+    # Runs once and exits. The "tools" profile keeps it out of a plain
+    # `docker compose up`; start it with `docker compose run --rm indexer`.
+    profiles: ["tools"]
+    command: ["sh", "scripts/build_index.sh"]
+    restart: "no"

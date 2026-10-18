@@ -1,0 +1,73 @@
+# Eval questions about Kestrel Ridge Outdoor Co., the fictional company in data/.
+#
+# Every expected answer comes from scripts/make_sample_data.py (seed 42): the
+# CSV figures are computed from fixed inputs, and the PDFs are generated from
+# the same numbers, so the ground truth is exact and stable across runs.
+# tests/test_evals.py checks that each pattern still matches the generated data.
+#
+# `expect`: regular expressions (case-insensitive). answer_hit is true only if
+# EVERY pattern appears in the final report. Why regexes rather than exact
+# strings: the writer may say "$466.7 million", "466.7M" or "18.7 percent";
+# the facts are what matter, not the wording.
+# `source`: where the answer lives, so a failure is easy to diagnose (did the
+# data agent, the RAG agent, or the writer drop it?).
+
+- id: revenue_by_year
+  question: What was Kestrel Ridge Outdoor Co.'s net revenue in each year from 2022 to 2024?
+  expect:
+    - '412\.6'
+    - '393\.1'
+    - '466\.7'
+  source: CSV (SUM of revenue_usd by year); also each annual report
+
+- id: growth_2024
+  question: By how much did Kestrel Ridge's net revenue grow in 2024 compared with 2023?
+  expect:
+    - '18\.7\s*(%|percent)'
+  source: CSV (computed growth); 2024 annual report, Financial Highlights
+
+- id: decline_2023
+  question: How did Kestrel Ridge's net revenue change in 2023 versus 2022, and why?
+  expect:
+    - '4\.7\s*(%|percent)'
+    - 'wholesale'
+    - 'inventor'
+  source: CSV for the figure; 2023 annual report letter for the reasons (wholesale destocking)
+
+- id: product_lines
+  question: Which product lines does Kestrel Ridge sell, and which one grew fastest in 2024?
+  expect:
+    - 'tents'
+    - 'packs'
+    - 'apparel'
+    - 'footwear'
+    - '28\.6\s*(%|percent)|footwear[^.\n]*fastest|fastest[^.\n]*footwear'
+  source: CSV (product_line column); 2024 annual report, Product Line Review
+
+- id: risks_2024
+  question: What are the key risks highlighted in Kestrel Ridge's 2024 annual report?
+  expect:
+    - 'tariff'
+    - 'Tanh Loc|supplier concentration|single (contract )?manufacturer'
+    - 'recall'
+  source: 2024 annual report, Risk Factors (PDF only)
+
+- id: supplier_concentration
+  question: How did Kestrel Ridge's reliance on Tanh Loc Manufacturing change from 2022 to 2024?
+  expect:
+    - '42\s*(%|percent)'
+    - '31\s*(%|percent)'
+  source: 2022 and 2024 annual reports, Risk Factors (PDF only)
+
+- id: dtc_share_2024
+  question: What share of Kestrel Ridge's 2024 net revenue came from direct-to-consumer sales?
+  expect:
+    - '45\.9\s*(%|percent)'
+  source: CSV (channel column); 2024 annual report
+
+- id: apac_growth_2024
+  question: How much did Kestrel Ridge's Asia-Pacific revenue grow in 2024, and to what amount?
+  expect:
+    - '36\.7\s*(%|percent)'
+    - '76\.3'
+  source: CSV (region column); 2024 annual report, region table

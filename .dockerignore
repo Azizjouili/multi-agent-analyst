@@ -1,0 +1,31 @@
+# Keep the build context small (faster builds) and keep secrets and local
+# state out of the image. Everything the image needs is listed in the Dockerfile.
+
+# Secrets: keys are passed at runtime, never baked into a layer.
+.env
+.env.*
+!.env.example
+
+# Local state: data/ is mounted as a volume at runtime instead. Baking it in
+# would freeze a stale index and database into the image.
+data/
+
+# Environments and caches (the image builds its own virtualenv).
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# Not needed at runtime.
+tests/
+evals/
+.git/
+.github/
+.vscode/
+.idea/
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -1,0 +1,5 @@
+# Shell scripts run inside the Linux container. A Windows checkout with
+# core.autocrlf would give them CRLF line endings, and `sh` then fails with
+# "$'\r': command not found". Force LF for them.
+*.sh text eol=lf
+Dockerfile text eol=lf

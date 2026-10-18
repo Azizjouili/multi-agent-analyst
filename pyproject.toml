@@ -1,0 +1,79 @@
+[project]
+name = "multi-agent-analyst"
+version = "0.1.0"
+description = "Supervisor + specialist agents (web, RAG, data) with a critic loop and human approval, built on LangGraph."
+readme = "README.md"
+requires-python = ">=3.11"
+# Why only a few deps for now: each build step adds the libraries it needs
+# (pypdf + sentence-transformers in the RAG step, fastapi in the API step, ...)
+# so every dependency shows up next to the code that justifies it.
+dependencies = [
+    "langgraph>=0.6",              # the agent graph: state, routing, Send, interrupt, checkpointing
+    "langchain-core>=0.3",         # common message / chat-model / runnable interfaces
+    "langchain-google-genai>=2.1", # Gemini chat model behind the langchain-core interface
+    "pydantic>=2.7",               # typed structured outputs (plans, critiques)
+    "pydantic-settings>=2.3",      # typed config loaded from env vars / .env
+    # --- RAG (step 4) ---
+    "numpy>=1.26",                 # the vector store is just a NumPy matrix
+    "pypdf>=5.0",                  # pure-Python PDF text extraction, no system deps
+    "sentence-transformers>=3.0",  # local embedding model (all-MiniLM-L6-v2), free
+    "torch>=2.4",                  # listed explicitly only so the CPU index below applies
+    "httpx>=0.27",
+    "ddgs>=9.0",
+    # --- Human-in-the-loop (step 11) ---
+    "langgraph-checkpoint-sqlite>=2.0",  # durable checkpoints: a paused run survives a restart
+    # --- Tracing (step 12) ---
+    "langfuse>=3.0",               # LangChain callback handler -> Langfuse Cloud traces (optional)
+    # --- API (step 13) ---
+    "fastapi>=0.115",              # HTTP API: start runs, poll status, submit the human review
+    "uvicorn>=0.30",               # ASGI server that runs the FastAPI app (scripts/serve.py)
+]
+
+[dependency-groups]
+# Its own group so the Docker image can generate the sample PDFs without
+# pulling in the test tooling (see Dockerfile).
+sample-data = [
+    "reportlab>=4.0",              # only used by scripts/make_sample_data.py to write PDFs
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pyyaml>=6.0",                 # only used by evals/ to read questions.yaml
+    { include-group = "sample-data" },
+]
+
+# Why a CPU-only torch index: the default Linux torch wheel bundles ~2 GB of
+# CUDA libraries. Embedding a few hundred chunks on CPU takes seconds, so we
+# don't need a GPU, and this keeps the Docker image small.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true  # use this index only for packages pinned to it below
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/analyst"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]  # lets tests import scripts/make_sample_data.py
+# Why opt-in markers: live tests spend real free-tier quota, and model tests
+# download ~90 MB the first time. Run them with `-m live` / `-m model`.
+addopts = "-m 'not live and not model'"
+markers = [
+    "live: calls a real LLM provider (needs GOOGLE_API_KEY)",
+    "model: loads the real sentence-transformers model (downloads it once)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
